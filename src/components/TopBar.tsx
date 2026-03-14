@@ -1,47 +1,29 @@
 import { Search, Bell, ChevronDown } from "lucide-react";
-import { useState } from "react";
-
-const gyms = [
-  { id: "1", name: "AuraFarming HQ" },
-  { id: "2", name: "Downtown Fitness" },
-  { id: "3", name: "East Side Gym" },
-];
+import { useAuth } from "@/contexts/AuthContext";
 
 export function TopBar({ sidebarWidth }: { sidebarWidth: number }) {
-  const [selectedGym, setSelectedGym] = useState(gyms[0]);
-  const [showGymDropdown, setShowGymDropdown] = useState(false);
+  const { user, gym, isSuperAdmin, roles } = useAuth();
+  
+  const displayName = user?.user_metadata?.full_name || user?.email || "User";
+  const initials = displayName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase();
+  const roleLabel = isSuperAdmin ? "Super Admin" : roles[0]?.role?.replace("_", " ") || "";
 
   return (
     <header
       className="fixed top-0 right-0 z-30 h-16 border-b border-border bg-background/80 backdrop-blur-sm flex items-center px-6 gap-4"
       style={{ left: sidebarWidth }}
     >
-      {/* Gym Switcher */}
-      <div className="relative">
-        <button
-          onClick={() => setShowGymDropdown(!showGymDropdown)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface shadow-surface text-sm hover:bg-surface-raised transition-colors"
-        >
-          <div className="w-5 h-5 rounded bg-primary/20 flex items-center justify-center">
-            <span className="text-primary text-[10px] font-bold">{selectedGym.name[0]}</span>
-          </div>
-          <span className="text-foreground font-medium">{selectedGym.name}</span>
-          <ChevronDown className="w-3 h-3 text-muted-foreground" />
-        </button>
-        {showGymDropdown && (
-          <div className="absolute top-full mt-1 left-0 w-56 bg-surface rounded-lg shadow-surface-lg border border-border py-1 z-50">
-            {gyms.map((gym) => (
-              <button
-                key={gym.id}
-                onClick={() => { setSelectedGym(gym); setShowGymDropdown(false); }}
-                className={`w-full text-left px-3 py-2 text-sm hover:bg-surface-raised transition-colors ${
-                  gym.id === selectedGym.id ? "text-primary" : "text-foreground"
-                }`}
-              >
-                {gym.name}
-              </button>
-            ))}
-          </div>
+      {/* Gym / Role Badge */}
+      <div className="flex items-center gap-2">
+        {gym && !isSuperAdmin && (
+          <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary text-xs font-medium">
+            {gym.code}
+          </span>
+        )}
+        {isSuperAdmin && (
+          <span className="px-2.5 py-1 rounded-md bg-accent/10 text-accent text-xs font-medium">
+            Platform Admin
+          </span>
         )}
       </div>
 
@@ -66,8 +48,14 @@ export function TopBar({ sidebarWidth }: { sidebarWidth: number }) {
           <Bell className="w-4 h-4 text-muted-foreground" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
         </button>
-        <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
-          <span className="text-accent text-xs font-bold">SA</span>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+            <span className="text-accent text-xs font-bold">{initials}</span>
+          </div>
+          <div className="hidden sm:block">
+            <p className="text-xs font-medium text-foreground">{displayName}</p>
+            <p className="text-[10px] text-muted-foreground capitalize">{roleLabel}</p>
+          </div>
         </div>
       </div>
     </header>
