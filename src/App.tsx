@@ -16,6 +16,7 @@ import Equipment from "./pages/Equipment";
 import Finance from "./pages/Finance";
 import Analytics from "./pages/Analytics";
 import Plans from "./pages/Plans";
+import MemberPortal from "./pages/MemberPortal";
 import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -33,13 +34,14 @@ const App = () => (
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/gyms" element={<ProtectedRoute allowedRoles={["super_admin"]}><Gyms /></ProtectedRoute>} />
-              <Route path="/members" element={<Members />} />
-              <Route path="/trainers" element={<Trainers />} />
-              <Route path="/attendance" element={<Attendance />} />
-              <Route path="/equipment" element={<Equipment />} />
-              <Route path="/finance" element={<Finance />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/plans" element={<Plans />} />
+              <Route path="/members" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Members /></ProtectedRoute>} />
+              <Route path="/trainers" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Trainers /></ProtectedRoute>} />
+              <Route path="/attendance" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Attendance /></ProtectedRoute>} />
+              <Route path="/equipment" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Equipment /></ProtectedRoute>} />
+              <Route path="/finance" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Finance /></ProtectedRoute>} />
+              <Route path="/analytics" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Analytics /></ProtectedRoute>} />
+              <Route path="/plans" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Plans /></ProtectedRoute>} />
+              <Route path="/my-portal" element={<ProtectedRoute allowedRoles={["member"]}><MemberPortal /></ProtectedRoute>} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
