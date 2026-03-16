@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusDot } from "@/components/StatusDot";
-import { Building2, Users, DollarSign, Plus, Loader2, CheckCircle2, Copy } from "lucide-react";
+import { Building2, Users, DollarSign, Plus, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { supabaseAdmin } from "@/integrations/supabase/admin";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -26,7 +25,6 @@ const Gyms = () => {
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [successInfo, setSuccessInfo] = useState<{ gymName: string; email: string; password: string } | null>(null);
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -72,31 +70,29 @@ const Gyms = () => {
 
       if (gymError) throw gymError;
 
-      // 2. Create gym admin auth account (using admin API to avoid session switch)
-      const { data: userData, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+      // 2. Create gym admin user
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: form.admin_email,
         password: form.admin_password,
-        email_confirm: true,
-        user_metadata: { full_name: form.admin_name },
+        options: { data: { full_name: form.admin_name } },
       });
-
-      if (createUserError) throw new Error(`Failed to create admin account: ${createUserError.message}`);
+      
+      if (signUpError) throw signUpError;
 
       // 3. Assign gym_admin role
-      if (userData.user) {
-        const { error: roleError } = await supabase.from("user_roles").insert({
-          user_id: userData.user.id,
+      if (signUpData.user) {
+        await supabase.from("user_roles").insert({
+          user_id: signUpData.user.id,
           role: "gym_admin" as const,
           gym_id: gym.id,
         });
-        if (roleError) throw roleError;
 
         // 4. Update profile with gym_id
-        await supabase.from("profiles").update({ gym_id: gym.id }).eq("user_id", userData.user.id);
+        await supabase.from("profiles").update({ gym_id: gym.id }).eq("user_id", signUpData.user.id);
       }
 
+      toast.success(`Gym "${form.name}" created with admin ${form.admin_email}`);
       setOpen(false);
-      setSuccessInfo({ gymName: form.name, email: form.admin_email, password: form.admin_password });
       setForm({ name: "", code: "", city: "", email: "", phone: "", primary_color: "#22c55e", secondary_color: "#0a0a0a", admin_email: "", admin_password: "", admin_name: "" });
       fetchGyms();
     } catch (err: any) {
@@ -231,7 +227,7 @@ const Gyms = () => {
                     <input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.admin_email} onChange={(e) => setForm({ ...form, admin_email: e.target.value })} placeholder="admin@kashimaya.com" />
                   </div>
                   <div>
-                    <label className="text-label mb-1 block">Temporary Password *</label>
+                    <label className="text-label mb-1 block">Password *</label>
                     <input type="password" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.admin_password} onChange={(e) => setForm({ ...form, admin_password: e.target.value })} placeholder="••••••••" />
                   </div>
                 </div>
@@ -243,49 +239,6 @@ const Gyms = () => {
             <button onClick={handleCreate} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Create Gym
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Success Credentials Dialog */}
-      <Dialog open={!!successInfo} onOpenChange={(v) => !v && setSuccessInfo(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <CheckCircle2 className="w-5 h-5 text-green-500" />
-              Gym Created Successfully
-            </DialogTitle>
-            <DialogDescription>
-              {successInfo?.gymName} has been created. Share these login credentials with the gym admin.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="bg-surface rounded-lg p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Email</p>
-                  <p className="text-sm font-medium text-foreground">{successInfo?.email}</p>
-                </div>
-                <button onClick={() => { navigator.clipboard.writeText(successInfo?.email || ""); toast.success("Email copied"); }} className="p-1.5 rounded hover:bg-surface-raised text-muted-foreground hover:text-foreground transition-colors">
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground">Temporary Password</p>
-                  <p className="text-sm font-medium text-foreground font-mono">{successInfo?.password}</p>
-                </div>
-                <button onClick={() => { navigator.clipboard.writeText(successInfo?.password || ""); toast.success("Password copied"); }} className="p-1.5 rounded hover:bg-surface-raised text-muted-foreground hover:text-foreground transition-colors">
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">The admin should change their password after first login.</p>
-          </div>
-          <DialogFooter>
-            <button onClick={() => setSuccessInfo(null)} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
-              Done
             </button>
           </DialogFooter>
         </DialogContent>
