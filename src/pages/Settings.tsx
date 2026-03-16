@@ -24,7 +24,8 @@ const prefLabels: { key: keyof NotificationPrefs; label: string }[] = [
 ];
 
 const SettingsPage = () => {
-  const { user } = useAuth();
+  const { user, gym } = useAuth();
+  const gymId = gym?.id ?? null;
 
   /* ---- profile state ---- */
   const [fullName, setFullName] = useState("");
@@ -52,11 +53,16 @@ const SettingsPage = () => {
     };
 
     const loadPrefs = async () => {
-      const { data } = await supabase
+      let query = supabase
         .from("notification_preferences")
         .select("equipment_maintenance, payment_overdue, new_member_registration, churn_risk")
-        .eq("user_id", user.id)
-        .maybeSingle();
+        .eq("user_id", user.id);
+      if (gymId) {
+        query = query.eq("gym_id", gymId);
+      } else {
+        query = query.is("gym_id", null);
+      }
+      const { data } = await query.maybeSingle();
       if (data) {
         setPrefs({
           equipment_maintenance: data.equipment_maintenance,
@@ -69,7 +75,7 @@ const SettingsPage = () => {
 
     loadProfile();
     loadPrefs();
-  }, [user]);
+  }, [user, gymId]);
 
   /* ---- save profile ---- */
   const handleProfileUpdate = async () => {
@@ -97,7 +103,7 @@ const SettingsPage = () => {
     const { error } = await supabase
       .from("notification_preferences")
       .upsert(
-        { user_id: user.id, ...updated },
+        { user_id: user.id, gym_id: gymId, ...updated },
         { onConflict: "user_id,gym_id" }
       );
 
