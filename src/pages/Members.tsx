@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusDot } from "@/components/StatusDot";
-import { Users, UserPlus, UserMinus, Search, Filter, Plus, Loader2 } from "lucide-react";
+import { Users, UserPlus, UserMinus, Search, Plus, Loader2, Pencil, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -25,7 +25,7 @@ interface Member {
 
 interface GymInfo { id: string; code: string; name: string; }
 interface TrainerInfo { id: string; full_name: string; }
-interface PlanInfo { id: string; name: string; }
+interface PlanInfo { id: string; name: string; price: number; duration_days: number; }
 
 const Members = () => {
   const { isSuperAdmin } = useAuth();
@@ -36,17 +36,16 @@ const Members = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [editItem, setEditItem] = useState<Member | null>(null);
+  const [deleteItem, setDeleteItem] = useState<Member | null>(null);
   const [saving, setSaving] = useState(false);
   const [nextCode, setNextCode] = useState("");
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [pendingMember, setPendingMember] = useState<{ name: string; planId: string; gymId: string } | null>(null);
   const [form, setForm] = useState({
-    full_name: "",
-    phone: "",
-    email: "",
-    weight: "",
-    gym_id: "",
-    plan_id: "",
-    trainer_id: "",
-    due_date: "",
+    full_name: "", phone: "", email: "", weight: "",
+    gym_id: "", plan_id: "", trainer_id: "", due_date: "", status: "active",
   });
 
   const fetchData = async () => {
@@ -54,12 +53,12 @@ const Members = () => {
       supabase.from("members").select("*").order("created_at", { ascending: false }),
       supabase.from("gyms").select("id, code, name"),
       supabase.from("trainers").select("id, full_name"),
-      supabase.from("plans").select("id, name"),
+      supabase.from("plans").select("id, name, price, duration_days"),
     ]);
     if (membersRes.data) setMembers(membersRes.data);
     if (gymsRes.data) setGyms(gymsRes.data);
     if (trainersRes.data) setTrainers(trainersRes.data);
-    if (plansRes.data) setPlans(plansRes.data);
+    if (plansRes.data) setPlans(plansRes.data as PlanInfo[]);
     setLoading(false);
   };
 
@@ -69,43 +68,123 @@ const Members = () => {
     const gym = gyms.find((g) => g.id === gymId);
     if (!gym) return "";
     const { count } = await supabase.from("members").select("*", { count: "exact", head: true }).eq("gym_id", gymId);
-    const num = (count || 0) + 1;
-    return `${gym.code}M${String(num).padStart(4, "0")}`;
+    return `${gym.code}M${String((count || 0) + 1).padStart(4, "0")}`;
   };
 
   const handleGymChange = async (gymId: string) => {
     setForm({ ...form, gym_id: gymId });
-    const code = await generateMemberCode(gymId);
-    setNextCode(code);
+    if (!editItem) {
+      const code = await generateMemberCode(gymId);
+      setNextCode(code);
+    }
   };
 
-  const handleCreate = async () => {
-    if (!form.full_name || !form.gym_id) {
-      toast.error("Name and gym are required");
-      return;
+  const resetForm = () => {
+    setForm({ full_name: "", phone: "", email: "", weight: "", gym_id: "", plan_id: "", trainer_id: "", due_date: "", status: "active" });
+    setNextCode("");
+    setEditItem(null);
+  };
+
+  const openEdit = (m: Member) => {
+    setEditItem(m);
+    setForm({
+      full_name: m.full_name, phone: m.phone || "", email: m.email || "",
+      weight: m.weight || "", gym_id: m.gym_id, plan_id: m.plan_id || "",
+      trainer_id: m.trainer_id || "", due_date: m.due_date || "", status: m.status,
+    });
+    setOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.full_name || (!editItem && !form.gym_id)) {
+      toast.error("Name and gym are required"); return;
     }
     setSaving(true);
     try {
-      const code = nextCode || await generateMemberCode(form.gym_id);
-      const { error } = await supabase.from("members").insert({
-        member_code: code,
-        full_name: form.full_name,
-        phone: form.phone || null,
-        email: form.email || null,
-        weight: form.weight || null,
-        gym_id: form.gym_id,
-        plan_id: form.plan_id || null,
-        trainer_id: form.trainer_id || null,
-        due_date: form.due_date || null,
-      });
-      if (error) throw error;
-      toast.success(`Member ${code} created`);
+      if (editItem) {
+        const { error } = await supabase.from("members").update({
+          full_name: form.full_name, phone: form.phone || null, email: form.email || null,
+          weight: form.weight || null, plan_id: form.plan_id || null,
+          trainer_id: form.trainer_id || null, due_date: form.due_date || null, status: form.status,
+        }).eq("id", editItem.id);
+        if (error) throw error;
+        toast.success("Member updated");
+      } else {
+        const code = nextCode || await generateMemberCode(form.gym_id);
+        const selectedPlan = plans.find(p => p.id === form.plan_id);
+        let dueDate = form.due_date;
+        if (selectedPlan && !dueDate) {
+          const d = new Date();
+          d.setDate(d.getDate() + selectedPlan.duration_days);
+          dueDate = d.toISOString().split("T")[0];
+        }
+
+        const { error } = await supabase.from("members").insert({
+          member_code: code, full_name: form.full_name,
+          phone: form.phone || null, email: form.email || null,
+          weight: form.weight || null, gym_id: form.gym_id,
+          plan_id: form.plan_id || null, trainer_id: form.trainer_id || null,
+          due_date: dueDate || null,
+        });
+        if (error) throw error;
+
+        // If plan selected, prompt payment
+        if (selectedPlan) {
+          setPendingMember({ name: form.full_name, planId: selectedPlan.id, gymId: form.gym_id });
+          setPaymentOpen(true);
+        }
+        toast.success(`Member ${code} created`);
+      }
       setOpen(false);
-      setForm({ full_name: "", phone: "", email: "", weight: "", gym_id: "", plan_id: "", trainer_id: "", due_date: "" });
-      setNextCode("");
+      resetForm();
       fetchData();
     } catch (err: any) {
-      toast.error(err.message || "Failed to create member");
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRecordPayment = async () => {
+    if (!pendingMember) return;
+    setSaving(true);
+    try {
+      const plan = plans.find(p => p.id === pendingMember.planId);
+      if (!plan) throw new Error("Plan not found");
+      // Find the member we just created
+      const { data: member } = await supabase.from("members").select("id").eq("full_name", pendingMember.name).eq("gym_id", pendingMember.gymId).order("created_at", { ascending: false }).limit(1).single();
+      
+      const { error } = await supabase.from("payments").insert({
+        gym_id: pendingMember.gymId,
+        member_id: member?.id || null,
+        amount: plan.price,
+        method: paymentMethod,
+        description: `${plan.name} subscription - ${pendingMember.name}`,
+        status: "completed",
+      });
+      if (error) throw error;
+      toast.success(`Payment of ₹${plan.price.toLocaleString("en-IN")} recorded via ${paymentMethod.toUpperCase()}`);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setPaymentOpen(false);
+      setPendingMember(null);
+      setPaymentMethod("cash");
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteItem) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase.from("members").delete().eq("id", deleteItem.id);
+      if (error) throw error;
+      toast.success(`${deleteItem.full_name} removed`);
+      setDeleteItem(null);
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
@@ -114,7 +193,6 @@ const Members = () => {
   const filtered = members.filter((m) =>
     m.full_name.toLowerCase().includes(search.toLowerCase()) || m.member_code.toLowerCase().includes(search.toLowerCase())
   );
-
   const activeCount = members.filter((m) => m.status === "active").length;
   const expiringCount = members.filter((m) => m.status === "expiring").length;
   const overdueCount = members.filter((m) => m.status === "overdue").length;
@@ -126,9 +204,8 @@ const Members = () => {
           <h1 className="text-lg font-semibold text-foreground">Members</h1>
           <p className="text-sm text-muted-foreground">{members.length} total members</p>
         </div>
-        <button onClick={() => setOpen(true)} className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Add Member
+        <button onClick={() => { resetForm(); setOpen(true); }} className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2">
+          <Plus className="w-4 h-4" /> Add Member
         </button>
       </div>
 
@@ -142,13 +219,8 @@ const Members = () => {
       <div className="flex gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search members..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-surface rounded-lg pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground shadow-surface focus:outline-none focus:ring-1 focus:ring-accent"
-          />
+          <input type="text" placeholder="Search members..." value={search} onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-surface rounded-lg pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground shadow-surface focus:outline-none focus:ring-1 focus:ring-accent" />
         </div>
       </div>
 
@@ -159,8 +231,7 @@ const Members = () => {
           columns={[
             { key: "member_code", header: "ID", className: "w-24" },
             {
-              key: "full_name",
-              header: "Member",
+              key: "full_name", header: "Member",
               render: (row: Member) => (
                 <div className="flex items-center gap-3">
                   <div className="w-7 h-7 rounded-lg bg-surface-raised flex items-center justify-center text-xs font-medium text-muted-foreground">
@@ -174,17 +245,17 @@ const Members = () => {
               ),
             },
             { key: "weight", header: "Weight", render: (row: Member) => <span>{row.weight || "—"}</span> },
+            { key: "status", header: "Status", render: (row: Member) => <StatusDot status={row.status === "active" ? "operational" : row.status === "expiring" ? "warning" : "critical"} label={row.status} /> },
+            { key: "due_date", header: "Due Date", render: (row: Member) => <span>{row.due_date || "—"}</span> },
             {
-              key: "status",
-              header: "Status",
+              key: "actions", header: "",
               render: (row: Member) => (
-                <StatusDot
-                  status={row.status === "active" ? "operational" : row.status === "expiring" ? "warning" : "critical"}
-                  label={row.status}
-                />
+                <div className="flex items-center gap-1">
+                  <button onClick={() => openEdit(row)} className="p-1.5 rounded hover:bg-surface-raised text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => setDeleteItem(row)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
               ),
             },
-            { key: "due_date", header: "Due Date", render: (row: Member) => <span>{row.due_date || "—"}</span> },
           ]}
           data={filtered}
         />
@@ -194,23 +265,23 @@ const Members = () => {
         <span>Showing {filtered.length} of {members.length} members</span>
       </div>
 
-      {/* Add Member Modal */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      {/* Add/Edit Member Modal */}
+      <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); setOpen(v); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add New Member</DialogTitle>
-            <DialogDescription>
-              {nextCode ? `Code: ${nextCode}` : "Select a gym to generate member code"}
-            </DialogDescription>
+            <DialogTitle>{editItem ? "Edit Member" : "Add New Member"}</DialogTitle>
+            <DialogDescription>{editItem ? `Editing ${editItem.member_code}` : nextCode ? `Code: ${nextCode}` : "Select a gym to generate member code"}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <div>
-              <label className="text-label mb-1 block">Gym *</label>
-              <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.gym_id} onChange={(e) => handleGymChange(e.target.value)}>
-                <option value="">Select gym</option>
-                {gyms.map((g) => <option key={g.id} value={g.id}>{g.name} ({g.code})</option>)}
-              </select>
-            </div>
+            {!editItem && (
+              <div>
+                <label className="text-label mb-1 block">Gym *</label>
+                <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.gym_id} onChange={(e) => handleGymChange(e.target.value)}>
+                  <option value="">Select gym</option>
+                  {gyms.map((g) => <option key={g.id} value={g.id}>{g.name} ({g.code})</option>)}
+                </select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-label mb-1 block">Full Name *</label>
@@ -236,7 +307,7 @@ const Members = () => {
                 <label className="text-label mb-1 block">Plan</label>
                 <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })}>
                   <option value="">No plan</option>
-                  {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {plans.map((p) => <option key={p.id} value={p.id}>{p.name} (₹{p.price})</option>)}
                 </select>
               </div>
               <div>
@@ -247,16 +318,84 @@ const Members = () => {
                 </select>
               </div>
             </div>
-            <div>
-              <label className="text-label mb-1 block">Due Date</label>
-              <input type="date" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-label mb-1 block">Due Date</label>
+                <input type="date" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
+              </div>
+              {editItem && (
+                <div>
+                  <label className="text-label mb-1 block">Status</label>
+                  <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                    <option value="active">Active</option>
+                    <option value="expiring">Expiring</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <button onClick={() => setOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button onClick={handleCreate} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+            <button onClick={() => { setOpen(false); resetForm(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              Add Member
+              {editItem ? "Save Changes" : "Add Member"}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment Modal */}
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>
+              {pendingMember && `Record payment for ${pendingMember.name}'s plan subscription`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="text-center">
+              <p className="text-2xl font-semibold text-foreground">
+                ₹{plans.find(p => p.id === pendingMember?.planId)?.price.toLocaleString("en-IN") || 0}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">{plans.find(p => p.id === pendingMember?.planId)?.name}</p>
+            </div>
+            <div>
+              <label className="text-label mb-2 block">Payment Method</label>
+              <div className="grid grid-cols-3 gap-2">
+                {["cash", "upi", "card"].map((m) => (
+                  <button key={m} onClick={() => setPaymentMethod(m)}
+                    className={`py-2.5 rounded-lg text-sm font-medium transition-colors border ${paymentMethod === m ? "bg-primary text-primary-foreground border-primary" : "bg-surface text-muted-foreground border-border hover:border-accent"}`}>
+                    {m.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => { setPaymentOpen(false); setPendingMember(null); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Skip</button>
+            <button onClick={handleRecordPayment} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Record Payment
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <Dialog open={!!deleteItem} onOpenChange={(v) => !v && setDeleteItem(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete Member</DialogTitle>
+            <DialogDescription>Are you sure you want to remove {deleteItem?.full_name}? This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button onClick={() => setDeleteItem(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleDelete} disabled={saving} className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Delete
             </button>
           </DialogFooter>
         </DialogContent>
