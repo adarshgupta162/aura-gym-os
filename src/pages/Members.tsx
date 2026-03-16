@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusDot } from "@/components/StatusDot";
-import { Users, UserPlus, UserMinus, Search, Plus, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Users, UserPlus, UserMinus, Search, Plus, Loader2, Pencil, Trash2, CheckCircle2, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { supabaseAdmin } from "@/integrations/supabase/admin";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -43,9 +44,11 @@ const Members = () => {
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [pendingMember, setPendingMember] = useState<{ name: string; planId: string; gymId: string } | null>(null);
+  const [successInfo, setSuccessInfo] = useState<{ memberCode: string; email: string; password: string; name: string } | null>(null);
   const [form, setForm] = useState({
     full_name: "", phone: "", email: "", weight: "",
     gym_id: "", plan_id: "", trainer_id: "", due_date: "", status: "active",
+    member_email: "", member_password: "",
   });
 
   const fetchData = async () => {
@@ -80,7 +83,7 @@ const Members = () => {
   };
 
   const resetForm = () => {
-    setForm({ full_name: "", phone: "", email: "", weight: "", gym_id: "", plan_id: "", trainer_id: "", due_date: "", status: "active" });
+    setForm({ full_name: "", phone: "", email: "", weight: "", gym_id: "", plan_id: "", trainer_id: "", due_date: "", status: "active", member_email: "", member_password: "" });
     setNextCode("");
     setEditItem(null);
   };
@@ -99,6 +102,9 @@ const Members = () => {
     if (!form.full_name || (!editItem && !form.gym_id)) {
       toast.error("Name and gym are required"); return;
     }
+    if (!editItem && (!form.member_email || !form.member_password)) {
+      toast.error("Email and temporary password are required for new members"); return;
+    }
     setSaving(true);
     try {
       if (editItem) {
@@ -110,6 +116,16 @@ const Members = () => {
         if (error) throw error;
         toast.success("Member updated");
       } else {
+        // 1. Create auth account for the member
+        const { data: userData, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
+          email: form.member_email,
+          password: form.member_password,
+          email_confirm: true,
+          user_metadata: { full_name: form.full_name },
+        });
+        if (createUserError) throw new Error(`Failed to create member account: ${createUserError.message}`);
+
+        // 2. Auto-generate member code
         const code = nextCode || await generateMemberCode(form.gym_id);
         const selectedPlan = plans.find(p => p.id === form.plan_id);
         let dueDate = form.due_date;
@@ -119,21 +135,32 @@ const Members = () => {
           dueDate = d.toISOString().split("T")[0];
         }
 
-        const { error } = await supabase.from("members").insert({
+        // 3. Insert member record with user_id
+        const { error: memberError } = await supabase.from("members").insert({
           member_code: code, full_name: form.full_name,
-          phone: form.phone || null, email: form.email || null,
+          phone: form.phone || null, email: form.member_email || null,
           weight: form.weight || null, gym_id: form.gym_id,
           plan_id: form.plan_id || null, trainer_id: form.trainer_id || null,
           due_date: dueDate || null,
+          user_id: userData.user.id,
         });
-        if (error) throw error;
+        if (memberError) throw memberError;
+
+        // 4. Assign member role in user_roles
+        const { error: roleError } = await supabase.from("user_roles").insert({
+          user_id: userData.user.id,
+          role: "member" as const,
+          gym_id: form.gym_id,
+        });
+        if (roleError) throw roleError;
 
         // If plan selected, prompt payment
         if (selectedPlan) {
           setPendingMember({ name: form.full_name, planId: selectedPlan.id, gymId: form.gym_id });
           setPaymentOpen(true);
         }
-        toast.success(`Member ${code} created`);
+
+        setSuccessInfo({ memberCode: code, email: form.member_email, password: form.member_password, name: form.full_name });
       }
       setOpen(false);
       resetForm();
@@ -335,6 +362,21 @@ const Members = () => {
                 </div>
               )}
             </div>
+            {!editItem && (
+              <div className="border-t border-border pt-4">
+                <p className="text-sm font-medium text-foreground mb-3">Member Login Account</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-label mb-1 block">Member Email *</label>
+                    <input type="email" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.member_email} onChange={(e) => setForm({ ...form, member_email: e.target.value })} placeholder="member@example.com" />
+                  </div>
+                  <div>
+                    <label className="text-label mb-1 block">Temporary Password *</label>
+                    <input type="password" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.member_password} onChange={(e) => setForm({ ...form, member_password: e.target.value })} placeholder="••••••••" />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <button onClick={() => { setOpen(false); resetForm(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
@@ -396,6 +438,53 @@ const Members = () => {
             <button onClick={handleDelete} disabled={saving} className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Delete
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Credentials Dialog */}
+      <Dialog open={!!successInfo} onOpenChange={(v) => !v && setSuccessInfo(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              Member Created Successfully
+            </DialogTitle>
+            <DialogDescription>
+              {successInfo?.name} has been added. Share these login credentials with the member.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="bg-surface rounded-lg p-4 space-y-2">
+              <div>
+                <p className="text-xs text-muted-foreground">Member Code</p>
+                <p className="text-sm font-semibold text-foreground font-mono">{successInfo?.memberCode}</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Email</p>
+                  <p className="text-sm font-medium text-foreground">{successInfo?.email}</p>
+                </div>
+                <button onClick={() => { navigator.clipboard.writeText(successInfo?.email || ""); toast.success("Email copied"); }} className="p-1.5 rounded hover:bg-surface-raised text-muted-foreground hover:text-foreground transition-colors">
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground">Temporary Password</p>
+                  <p className="text-sm font-medium text-foreground font-mono">{successInfo?.password}</p>
+                </div>
+                <button onClick={() => { navigator.clipboard.writeText(successInfo?.password || ""); toast.success("Password copied"); }} className="p-1.5 rounded hover:bg-surface-raised text-muted-foreground hover:text-foreground transition-colors">
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">The member should change their password after first login.</p>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setSuccessInfo(null)} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">
+              Done
             </button>
           </DialogFooter>
         </DialogContent>
