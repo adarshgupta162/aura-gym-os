@@ -87,10 +87,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchUserData(session.user.id).finally(() => {
+          clearTimeout(safetyTimeout);
           setLoading(false);
           initialLoadDone.current = true;
         });
       } else {
+        clearTimeout(safetyTimeout);
         setRolesLoaded(true);
         setLoading(false);
         initialLoadDone.current = true;
