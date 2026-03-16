@@ -2,27 +2,41 @@ import { useEffect, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusDot } from "@/components/StatusDot";
-import { Users, UserPlus, DollarSign, Plus, Dumbbell, Loader2, Pencil, Trash2 } from "lucide-react";
+import { Users, UserPlus, DollarSign, Plus, Dumbbell, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
 interface Trainer {
-  id: string; trainer_code: string; full_name: string; phone: string | null;
-  specialization: string | null; salary: number | null; status: string; gym_id: string; created_at: string;
+  id: string;
+  trainer_code: string;
+  full_name: string;
+  phone: string | null;
+  specialization: string | null;
+  salary: number | null;
+  status: string;
+  gym_id: string;
+  created_at: string;
 }
+
 interface GymInfo { id: string; code: string; name: string; }
 
 const Trainers = () => {
+  const { isSuperAdmin } = useAuth();
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [gyms, setGyms] = useState<GymInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [editItem, setEditItem] = useState<Trainer | null>(null);
-  const [deleteItem, setDeleteItem] = useState<Trainer | null>(null);
   const [saving, setSaving] = useState(false);
   const [nextCode, setNextCode] = useState("");
-  const [form, setForm] = useState({ full_name: "", phone: "", specialization: "", salary: "", gym_id: "", status: "active" });
+  const [form, setForm] = useState({
+    full_name: "",
+    phone: "",
+    specialization: "",
+    salary: "",
+    gym_id: "",
+  });
 
   const fetchData = async () => {
     const [trainersRes, gymsRes] = await Promise.all([
@@ -36,62 +50,52 @@ const Trainers = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  const generateCode = async (gymId: string) => {
+  const generateTrainerCode = async (gymId: string) => {
     const gym = gyms.find((g) => g.id === gymId);
     if (!gym) return "";
     const { count } = await supabase.from("trainers").select("*", { count: "exact", head: true }).eq("gym_id", gymId);
-    return `${gym.code}T${String((count || 0) + 1).padStart(4, "0")}`;
+    const num = (count || 0) + 1;
+    return `${gym.code}T${String(num).padStart(4, "0")}`;
   };
 
   const handleGymChange = async (gymId: string) => {
     setForm({ ...form, gym_id: gymId });
-    if (!editItem) setNextCode(await generateCode(gymId));
+    const code = await generateTrainerCode(gymId);
+    setNextCode(code);
   };
 
-  const resetForm = () => { setForm({ full_name: "", phone: "", specialization: "", salary: "", gym_id: "", status: "active" }); setNextCode(""); setEditItem(null); };
-
-  const openEdit = (t: Trainer) => {
-    setEditItem(t);
-    setForm({ full_name: t.full_name, phone: t.phone || "", specialization: t.specialization || "", salary: t.salary?.toString() || "", gym_id: t.gym_id, status: t.status });
-    setOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!form.full_name || (!editItem && !form.gym_id)) { toast.error("Name and gym required"); return; }
+  const handleCreate = async () => {
+    if (!form.full_name || !form.gym_id) {
+      toast.error("Name and gym are required");
+      return;
+    }
     setSaving(true);
     try {
-      if (editItem) {
-        const { error } = await supabase.from("trainers").update({
-          full_name: form.full_name, phone: form.phone || null,
-          specialization: form.specialization || null, salary: form.salary ? parseFloat(form.salary) : null, status: form.status,
-        }).eq("id", editItem.id);
-        if (error) throw error;
-        toast.success("Trainer updated");
-      } else {
-        const code = nextCode || await generateCode(form.gym_id);
-        const { error } = await supabase.from("trainers").insert({
-          trainer_code: code, full_name: form.full_name, phone: form.phone || null,
-          specialization: form.specialization || null, salary: form.salary ? parseFloat(form.salary) : null, gym_id: form.gym_id,
-        });
-        if (error) throw error;
-        toast.success(`Trainer ${code} created`);
-      }
-      setOpen(false); resetForm(); fetchData();
-    } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
-  };
-
-  const handleDelete = async () => {
-    if (!deleteItem) return;
-    setSaving(true);
-    try {
-      const { error } = await supabase.from("trainers").delete().eq("id", deleteItem.id);
+      const code = nextCode || await generateTrainerCode(form.gym_id);
+      const { error } = await supabase.from("trainers").insert({
+        trainer_code: code,
+        full_name: form.full_name,
+        phone: form.phone || null,
+        specialization: form.specialization || null,
+        salary: form.salary ? parseFloat(form.salary) : null,
+        gym_id: form.gym_id,
+      });
       if (error) throw error;
-      toast.success(`${deleteItem.full_name} removed`); setDeleteItem(null); fetchData();
-    } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
+      toast.success(`Trainer ${code} created`);
+      setOpen(false);
+      setForm({ full_name: "", phone: "", specialization: "", salary: "", gym_id: "" });
+      setNextCode("");
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create trainer");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const activeTrainers = trainers.filter((t) => t.status === "active").length;
   const totalSalary = trainers.reduce((sum, t) => sum + (t.salary || 0), 0);
+
   const formatCurrency = (n: number) => {
     if (n >= 100000) return `₹${(n / 100000).toFixed(2)}L`;
     if (n >= 1000) return `₹${(n / 1000).toFixed(1)}K`;
@@ -105,8 +109,9 @@ const Trainers = () => {
           <h1 className="text-lg font-semibold text-foreground">Trainers</h1>
           <p className="text-sm text-muted-foreground">{trainers.length} trainers registered</p>
         </div>
-        <button onClick={() => { resetForm(); setOpen(true); }} className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Add Trainer
+        <button onClick={() => setOpen(true)} className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          Add Trainer
         </button>
       </div>
 
@@ -123,45 +128,57 @@ const Trainers = () => {
         <DataTable
           columns={[
             { key: "trainer_code", header: "Code", className: "w-24" },
-            { key: "full_name", header: "Trainer", render: (row: Trainer) => (
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                  {row.full_name.split(" ").map((n) => n[0]).join("")}
+            {
+              key: "full_name",
+              header: "Trainer",
+              render: (row: Trainer) => (
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+                    {row.full_name.split(" ").map((n) => n[0]).join("")}
+                  </div>
+                  <div>
+                    <p className="text-foreground font-medium">{row.full_name}</p>
+                    <p className="text-xs text-muted-foreground">{row.phone || "—"}</p>
+                  </div>
                 </div>
-                <div><p className="text-foreground font-medium">{row.full_name}</p><p className="text-xs text-muted-foreground">{row.phone || "—"}</p></div>
-              </div>
-            )},
+              ),
+            },
             { key: "specialization", header: "Specialization", render: (row: Trainer) => <span>{row.specialization || "—"}</span> },
             { key: "salary", header: "Salary", render: (row: Trainer) => <span>{row.salary ? formatCurrency(row.salary) : "—"}</span> },
-            { key: "status", header: "Status", render: (row: Trainer) => <StatusDot status={row.status === "active" ? "operational" : "critical"} label={row.status} /> },
-            { key: "actions", header: "", render: (row: Trainer) => (
-              <div className="flex items-center gap-1">
-                <button onClick={() => openEdit(row)} className="p-1.5 rounded hover:bg-surface-raised text-muted-foreground hover:text-foreground transition-colors"><Pencil className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setDeleteItem(row)} className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-              </div>
-            )},
+            {
+              key: "status",
+              header: "Status",
+              render: (row: Trainer) => (
+                <StatusDot status={row.status === "active" ? "operational" : "critical"} label={row.status} />
+              ),
+            },
+            {
+              key: "actions",
+              header: "",
+              render: () => <button className="text-xs text-accent hover:underline">Manage →</button>,
+            },
           ]}
           data={trainers}
         />
       )}
 
-      {/* Add/Edit Modal */}
-      <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); setOpen(v); }}>
+      {/* Add Trainer Modal */}
+      <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editItem ? "Edit Trainer" : "Add New Trainer"}</DialogTitle>
-            <DialogDescription>{editItem ? `Editing ${editItem.trainer_code}` : nextCode ? `Code: ${nextCode}` : "Select a gym to generate trainer code"}</DialogDescription>
+            <DialogTitle>Add New Trainer</DialogTitle>
+            <DialogDescription>
+              {nextCode ? `Code: ${nextCode}` : "Select a gym to generate trainer code"}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            {!editItem && (
-              <div>
-                <label className="text-label mb-1 block">Gym *</label>
-                <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.gym_id} onChange={(e) => handleGymChange(e.target.value)}>
-                  <option value="">Select gym</option>
-                  {gyms.map((g) => <option key={g.id} value={g.id}>{g.name} ({g.code})</option>)}
-                </select>
-              </div>
-            )}
+            <div>
+              <label className="text-label mb-1 block">Gym *</label>
+              <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.gym_id} onChange={(e) => handleGymChange(e.target.value)}>
+                <option value="">Select gym</option>
+                {gyms.map((g) => <option key={g.id} value={g.id}>{g.name} ({g.code})</option>)}
+              </select>
+            </div>
             <div>
               <label className="text-label mb-1 block">Full Name *</label>
               <input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Coach Raj" />
@@ -176,43 +193,16 @@ const Trainers = () => {
                 <input type="number" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.salary} onChange={(e) => setForm({ ...form, salary: e.target.value })} placeholder="35000" />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-label mb-1 block">Specialization</label>
-                <input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} placeholder="Strength & Conditioning" />
-              </div>
-              {editItem && (
-                <div>
-                  <label className="text-label mb-1 block">Status</label>
-                  <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              )}
+            <div>
+              <label className="text-label mb-1 block">Specialization</label>
+              <input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.specialization} onChange={(e) => setForm({ ...form, specialization: e.target.value })} placeholder="Strength & Conditioning" />
             </div>
           </div>
           <DialogFooter>
-            <button onClick={() => { setOpen(false); resetForm(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+            <button onClick={() => setOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleCreate} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
-              {editItem ? "Save Changes" : "Add Trainer"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation */}
-      <Dialog open={!!deleteItem} onOpenChange={(v) => !v && setDeleteItem(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Delete Trainer</DialogTitle>
-            <DialogDescription>Remove {deleteItem?.full_name}? This cannot be undone.</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <button onClick={() => setDeleteItem(null)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button onClick={handleDelete} disabled={saving} className="px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50 flex items-center gap-2">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />} Delete
+              Add Trainer
             </button>
           </DialogFooter>
         </DialogContent>
