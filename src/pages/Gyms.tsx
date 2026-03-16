@@ -80,7 +80,7 @@ const Gyms = () => {
         user_metadata: { full_name: form.admin_name },
       });
 
-      if (createUserError) throw createUserError;
+      if (createUserError) throw new Error(`Failed to create admin account: ${createUserError.message}`);
 
       // 3. Assign gym_admin role
       if (userData.user) {

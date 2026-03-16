@@ -123,7 +123,7 @@ const Members = () => {
           email_confirm: true,
           user_metadata: { full_name: form.full_name },
         });
-        if (createUserError) throw createUserError;
+        if (createUserError) throw new Error(`Failed to create member account: ${createUserError.message}`);
 
         // 2. Auto-generate member code
         const code = nextCode || await generateMemberCode(form.gym_id);
