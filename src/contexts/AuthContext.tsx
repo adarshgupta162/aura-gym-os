@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -41,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [gym, setGym] = useState<GymBranding | null>(null);
   const [loading, setLoading] = useState(true);
   const [rolesLoaded, setRolesLoaded] = useState(false);
+  const initialLoadDone = useRef(false);
 
   const activeRole = roles.length > 0 ? roles[0].role : null;
   const isSuperAdmin = roles.some((r) => r.role === "super_admin");
@@ -74,22 +75,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // ✅ Only use getSession on initial load — ignore onAuthStateChange race
+    // Safety timeout: prevent infinite loading if roles fetch hangs
+    const safetyTimeout = setTimeout(() => {
+      setRolesLoaded(true);
+      setLoading(false);
+    }, 5000);
+
+    // ✅ Only use getSession on initial page load to get the session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserData(session.user.id).finally(() => setLoading(false));
+        fetchUserData(session.user.id).finally(() => {
+          setLoading(false);
+          initialLoadDone.current = true;
+        });
       } else {
         setRolesLoaded(true);
         setLoading(false);
+        initialLoadDone.current = true;
       }
     });
 
-    // ✅ onAuthStateChange only handles login/logout events
+    // ✅ onAuthStateChange only for subsequent SIGNED_IN and SIGNED_OUT events
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (event === "SIGNED_IN") {
+        if (event === "SIGNED_IN" && initialLoadDone.current) {
           setSession(session);
           setUser(session?.user ?? null);
           if (session?.user) {
@@ -108,7 +119,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(safetyTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
