@@ -47,6 +47,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchUserData = async (userId: string) => {
     try {
+      setRolesLoaded(false); // ✅ Reset before fetching
+      
       const { data: rolesData } = await supabase
         .from("user_roles")
         .select("role, gym_id")
@@ -67,42 +69,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setGym(null);
       }
     } finally {
-      setRolesLoaded(true);
+      setRolesLoaded(true); // ✅ Only true AFTER roles are fetched
     }
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          setTimeout(() => fetchUserData(session.user.id), 0);
-        } else {
-          setRoles([]);
-          setGym(null);
-          setRolesLoaded(true);
-        }
-        setLoading(false);
-      }
-    );
-
+    // ✅ Only use getSession on initial load — ignore onAuthStateChange race
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchUserData(session.user.id);
+        fetchUserData(session.user.id).finally(() => setLoading(false));
       } else {
         setRolesLoaded(true);
+        setLoading(false);
       }
-      setLoading(false);
     });
+
+    // ✅ onAuthStateChange only handles login/logout events
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_IN") {
+          setSession(session);
+          setUser(session?.user ?? null);
+          if (session?.user) {
+            await fetchUserData(session.user.id);
+          }
+          setLoading(false);
+        }
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          setSession(null);
+          setRoles([]);
+          setGym(null);
+          setRolesLoaded(true);
+          setLoading(false);
+        }
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    setRolesLoaded(false);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error };
   };
@@ -121,9 +130,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    setRoles([]);
-    setGym(null);
-    setRolesLoaded(false);
   };
 
   return (
