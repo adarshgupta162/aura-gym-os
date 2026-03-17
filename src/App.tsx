@@ -34,13 +34,13 @@ const App = () => (
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/gyms" element={<ProtectedRoute allowedRoles={["super_admin"]}><Gyms /></ProtectedRoute>} />
-              <Route path="/members" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Members /></ProtectedRoute>} />
-              <Route path="/trainers" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Trainers /></ProtectedRoute>} />
-              <Route path="/attendance" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Attendance /></ProtectedRoute>} />
-              <Route path="/equipment" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Equipment /></ProtectedRoute>} />
-              <Route path="/finance" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Finance /></ProtectedRoute>} />
-              <Route path="/analytics" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Analytics /></ProtectedRoute>} />
-              <Route path="/plans" element={<ProtectedRoute allowedRoles={["gym_admin"]}><Plans /></ProtectedRoute>} />
+              <Route path="/members" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Members /></ProtectedRoute>} />
+              <Route path="/trainers" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Trainers /></ProtectedRoute>} />
+              <Route path="/attendance" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Attendance /></ProtectedRoute>} />
+              <Route path="/equipment" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Equipment /></ProtectedRoute>} />
+              <Route path="/finance" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Finance /></ProtectedRoute>} />
+              <Route path="/analytics" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Analytics /></ProtectedRoute>} />
+              <Route path="/plans" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Plans /></ProtectedRoute>} />
               <Route path="/my-portal" element={<ProtectedRoute allowedRoles={["member"]}><MemberPortal /></ProtectedRoute>} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
