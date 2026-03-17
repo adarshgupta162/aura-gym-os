@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useRef, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -41,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [gym, setGym] = useState<GymBranding | null>(null);
   const [loading, setLoading] = useState(true);
   const [rolesLoaded, setRolesLoaded] = useState(false);
+  const initializedRef = useRef(false);
 
   const activeRole = roles.length > 0 ? roles[0].role : null;
   const isSuperAdmin = roles.some((r) => r.role === "super_admin");
@@ -72,11 +73,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    // Safety timeout - never stuck loading
+    const timeoutId = setTimeout(() => {
+      setLoading(false);
+      setRolesLoaded(true);
+    }, 5000);
+
+    // Set up listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
+          // Use setTimeout to avoid deadlock with Supabase internals
           setTimeout(() => fetchUserData(session.user.id), 0);
         } else {
           setRoles([]);
@@ -84,9 +96,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setRolesLoaded(true);
         }
         setLoading(false);
+        clearTimeout(timeoutId);
       }
     );
 
+    // THEN get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -96,9 +110,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRolesLoaded(true);
       }
       setLoading(false);
+      clearTimeout(timeoutId);
+    }).catch(() => {
+      setLoading(false);
+      setRolesLoaded(true);
+      clearTimeout(timeoutId);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timeoutId);
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {
