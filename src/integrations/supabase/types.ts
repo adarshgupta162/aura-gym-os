@@ -16,26 +16,35 @@ export type Database = {
     Tables: {
       attendance: {
         Row: {
+          audit_note: string | null
           check_in: string
           check_out: string | null
+          date: string | null
           gym_id: string
           id: string
+          marked_by: string | null
           member_id: string
           method: string
         }
         Insert: {
+          audit_note?: string | null
           check_in?: string
           check_out?: string | null
+          date?: string | null
           gym_id: string
           id?: string
+          marked_by?: string | null
           member_id: string
           method?: string
         }
         Update: {
+          audit_note?: string | null
           check_in?: string
           check_out?: string | null
+          date?: string | null
           gym_id?: string
           id?: string
+          marked_by?: string | null
           member_id?: string
           method?: string
         }
@@ -52,6 +61,41 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_codes: {
+        Row: {
+          code: string
+          created_at: string
+          date: string
+          gym_id: string
+          id: string
+          qr_token: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          date?: string
+          gym_id: string
+          id?: string
+          qr_token?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          date?: string
+          gym_id?: string
+          id?: string
+          qr_token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_codes_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
             referencedColumns: ["id"]
           },
         ]
@@ -197,6 +241,48 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      member_xp: {
+        Row: {
+          created_at: string
+          gym_id: string
+          id: string
+          member_id: string
+          reason: string | null
+          xp: number
+        }
+        Insert: {
+          created_at?: string
+          gym_id: string
+          id?: string
+          member_id: string
+          reason?: string | null
+          xp?: number
+        }
+        Update: {
+          created_at?: string
+          gym_id?: string
+          id?: string
+          member_id?: string
+          reason?: string | null
+          xp?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "member_xp_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "member_xp_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       members: {
         Row: {
@@ -410,6 +496,60 @@ export type Database = {
           },
         ]
       }
+      progress_logs: {
+        Row: {
+          created_at: string
+          gym_id: string
+          id: string
+          log_type: string
+          logged_at: string
+          member_id: string
+          notes: string | null
+          photo_url: string | null
+          unit: string | null
+          value: number | null
+        }
+        Insert: {
+          created_at?: string
+          gym_id: string
+          id?: string
+          log_type?: string
+          logged_at?: string
+          member_id: string
+          notes?: string | null
+          photo_url?: string | null
+          unit?: string | null
+          value?: number | null
+        }
+        Update: {
+          created_at?: string
+          gym_id?: string
+          id?: string
+          log_type?: string
+          logged_at?: string
+          member_id?: string
+          notes?: string | null
+          photo_url?: string | null
+          unit?: string | null
+          value?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "progress_logs_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "progress_logs_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trainers: {
         Row: {
           created_at: string
@@ -488,6 +628,73 @@ export type Database = {
             columns: ["gym_id"]
             isOneToOne: false
             referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_plans: {
+        Row: {
+          created_at: string
+          day_of_week: number
+          exercise_name: string
+          gym_id: string
+          id: string
+          is_done: boolean | null
+          member_id: string
+          notes: string | null
+          reps: string | null
+          sets: number | null
+          trainer_id: string | null
+          week_start: string | null
+        }
+        Insert: {
+          created_at?: string
+          day_of_week: number
+          exercise_name: string
+          gym_id: string
+          id?: string
+          is_done?: boolean | null
+          member_id: string
+          notes?: string | null
+          reps?: string | null
+          sets?: number | null
+          trainer_id?: string | null
+          week_start?: string | null
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number
+          exercise_name?: string
+          gym_id?: string
+          id?: string
+          is_done?: boolean | null
+          member_id?: string
+          notes?: string | null
+          reps?: string | null
+          sets?: number | null
+          trainer_id?: string | null
+          week_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_plans_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_plans_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_plans_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
             referencedColumns: ["id"]
           },
         ]
