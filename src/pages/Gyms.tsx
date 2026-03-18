@@ -19,6 +19,12 @@ const Gyms = () => {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [credentialsModal, setCredentialsModal] = useState<{ gymName: string; email: string; password: string } | null>(null);
+  const [viewGym, setViewGym] = useState<any>(null);
+  const [viewGymMembers, setViewGymMembers] = useState<any[]>([]);
+  const [viewGymPayments, setViewGymPayments] = useState<any[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [credentialsModal, setCredentialsModal] = useState<{ gymName: string; email: string; password: string } | null>(null);
   const [form, setForm] = useState({
     name: "", code: "", city: "", email: "", phone: "",
     primary_color: "#22c55e", secondary_color: "#0a0a0a",
