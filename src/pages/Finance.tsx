@@ -19,12 +19,14 @@ const Finance = () => {
   const [payForm, setPayForm] = useState({ member_id: "", amount: "", method: "cash", description: "", status: "completed" });
 
   const fetchData = async () => {
-    const [payRes, expRes] = await Promise.all([
-      supabase.from("payments").select("*").order("payment_date", { ascending: false }),
+    const [payRes, expRes, memRes] = await Promise.all([
+      supabase.from("payments").select("*, members(full_name, member_code)").order("payment_date", { ascending: false }),
       supabase.from("expenses").select("*").order("expense_date", { ascending: false }),
+      supabase.from("members").select("id, full_name, member_code").eq("status", "active"),
     ]);
     setPayments(payRes.data || []);
     setExpenses(expRes.data || []);
+    setMembers(memRes.data || []);
     setLoading(false);
   };
 
