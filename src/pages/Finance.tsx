@@ -120,9 +120,14 @@ const Finance = () => {
           <h1 className="text-lg font-semibold text-foreground">Finance & Revenue</h1>
           <p className="text-sm text-muted-foreground">Overview</p>
         </div>
-        <button onClick={() => setExpenseOpen(true)} className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Add Expense
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setPaymentOpen(true)} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Record Payment
+          </button>
+          <button onClick={() => setExpenseOpen(true)} className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Expense
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
