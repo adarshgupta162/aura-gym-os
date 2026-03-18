@@ -232,6 +232,58 @@ const Finance = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Record Payment Modal */}
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>Record a member payment.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-label mb-1 block">Member *</label>
+              <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.member_id} onChange={(e) => setPayForm({ ...payForm, member_id: e.target.value })}>
+                <option value="">Select member</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>{m.full_name} ({m.member_code})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Amount (₹) *</label>
+              <input type="number" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} placeholder="5000" />
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Method *</label>
+              <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.method} onChange={(e) => setPayForm({ ...payForm, method: e.target.value })}>
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="online">Online</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Status</label>
+              <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.status} onChange={(e) => setPayForm({ ...payForm, status: e.target.value })}>
+                <option value="completed">Completed</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Description</label>
+              <input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.description} onChange={(e) => setPayForm({ ...payForm, description: e.target.value })} placeholder="Monthly subscription" />
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setPaymentOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleAddPayment} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Record Payment
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
