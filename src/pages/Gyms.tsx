@@ -215,6 +215,51 @@ const Gyms = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* View Gym Dialog */}
+      <Dialog open={!!viewGym} onOpenChange={() => setViewGym(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{viewGym?.name}</DialogTitle>
+            <DialogDescription>Gym details and member overview</DialogDescription>
+          </DialogHeader>
+          {viewLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-surface rounded-lg p-3 text-center">
+                  <p className="text-lg font-bold text-foreground">{viewGymMembers.length}</p>
+                  <p className="text-xs text-muted-foreground">Members</p>
+                </div>
+                <div className="bg-surface rounded-lg p-3 text-center">
+                  <p className="text-lg font-bold text-foreground">{viewGymMembers.filter(m => m.status === "active").length}</p>
+                  <p className="text-xs text-muted-foreground">Active</p>
+                </div>
+                <div className="bg-surface rounded-lg p-3 text-center">
+                  <p className="text-lg font-bold text-foreground">₹{viewGymPayments.filter(p => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0).toLocaleString("en-IN")}</p>
+                  <p className="text-xs text-muted-foreground">Revenue</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground mb-2">Members</p>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {viewGymMembers.map((m: any) => (
+                    <div key={m.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-surface-raised text-sm">
+                      <span className="text-foreground">{m.full_name} <span className="text-xs text-muted-foreground">({m.member_code})</span></span>
+                      <span className={`text-xs font-medium capitalize ${m.status === "active" ? "text-primary" : m.status === "frozen" ? "text-destructive" : "text-muted-foreground"}`}>{m.status}</span>
+                    </div>
+                  ))}
+                  {viewGymMembers.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No members</p>}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setViewGym(null)} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">Close</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
