@@ -10,18 +10,23 @@ import { toast } from "sonner";
 const Finance = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ category: "", amount: "", description: "" });
+  const [payForm, setPayForm] = useState({ member_id: "", amount: "", method: "cash", description: "", status: "completed" });
 
   const fetchData = async () => {
-    const [payRes, expRes] = await Promise.all([
-      supabase.from("payments").select("*").order("payment_date", { ascending: false }),
+    const [payRes, expRes, memRes] = await Promise.all([
+      supabase.from("payments").select("*, members(full_name, member_code)").order("payment_date", { ascending: false }),
       supabase.from("expenses").select("*").order("expense_date", { ascending: false }),
+      supabase.from("members").select("id, full_name, member_code").eq("status", "active"),
     ]);
     setPayments(payRes.data || []);
     setExpenses(expRes.data || []);
+    setMembers(memRes.data || []);
     setLoading(false);
   };
 
@@ -77,6 +82,35 @@ const Finance = () => {
     }
   };
 
+  const handleAddPayment = async () => {
+    if (!payForm.member_id || !payForm.amount) { toast.error("Member and amount required"); return; }
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { data: gymId } = await supabase.rpc("get_user_gym_id", { _user_id: user.id });
+      if (!gymId) throw new Error("No gym assigned");
+
+      const { error } = await supabase.from("payments").insert({
+        member_id: payForm.member_id,
+        amount: parseFloat(payForm.amount),
+        method: payForm.method,
+        description: payForm.description || null,
+        status: payForm.status,
+        gym_id: gymId,
+      });
+      if (error) throw error;
+      toast.success("Payment recorded");
+      setPaymentOpen(false);
+      setPayForm({ member_id: "", amount: "", method: "cash", description: "", status: "completed" });
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   return (
@@ -86,9 +120,14 @@ const Finance = () => {
           <h1 className="text-lg font-semibold text-foreground">Finance & Revenue</h1>
           <p className="text-sm text-muted-foreground">Overview</p>
         </div>
-        <button onClick={() => setExpenseOpen(true)} className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2">
-          <Plus className="w-4 h-4" /> Add Expense
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setPaymentOpen(true)} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Record Payment
+          </button>
+          <button onClick={() => setExpenseOpen(true)} className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors flex items-center gap-2">
+            <Plus className="w-4 h-4" /> Add Expense
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -131,6 +170,7 @@ const Finance = () => {
           <DataTable
             columns={[
               { key: "payment_date", header: "Date", render: (r: any) => <span className="text-xs">{new Date(r.payment_date).toLocaleDateString()}</span> },
+              { key: "member", header: "Member", render: (r: any) => <span className="text-xs">{r.members?.full_name || "—"}</span> },
               { key: "description", header: "Description", render: (r: any) => <span>{r.description || "—"}</span> },
               { key: "method", header: "Method", render: (r: any) => <span className="capitalize text-xs">{r.method}</span> },
               { key: "amount", header: "Amount", render: (r: any) => <span>₹{Number(r.amount).toLocaleString("en-IN")}</span> },
@@ -189,6 +229,58 @@ const Finance = () => {
             <button onClick={handleAddExpense} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               Add Expense
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Payment Modal */}
+      <Dialog open={paymentOpen} onOpenChange={setPaymentOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Record Payment</DialogTitle>
+            <DialogDescription>Record a member payment.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-label mb-1 block">Member *</label>
+              <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.member_id} onChange={(e) => setPayForm({ ...payForm, member_id: e.target.value })}>
+                <option value="">Select member</option>
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>{m.full_name} ({m.member_code})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Amount (₹) *</label>
+              <input type="number" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.amount} onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} placeholder="5000" />
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Method *</label>
+              <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.method} onChange={(e) => setPayForm({ ...payForm, method: e.target.value })}>
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="online">Online</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Status</label>
+              <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.status} onChange={(e) => setPayForm({ ...payForm, status: e.target.value })}>
+                <option value="completed">Completed</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Description</label>
+              <input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={payForm.description} onChange={(e) => setPayForm({ ...payForm, description: e.target.value })} placeholder="Monthly subscription" />
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setPaymentOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleAddPayment} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Record Payment
             </button>
           </DialogFooter>
         </DialogContent>
