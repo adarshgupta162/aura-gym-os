@@ -82,6 +82,35 @@ const Finance = () => {
     }
   };
 
+  const handleAddPayment = async () => {
+    if (!payForm.member_id || !payForm.amount) { toast.error("Member and amount required"); return; }
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { data: gymId } = await supabase.rpc("get_user_gym_id", { _user_id: user.id });
+      if (!gymId) throw new Error("No gym assigned");
+
+      const { error } = await supabase.from("payments").insert({
+        member_id: payForm.member_id,
+        amount: parseFloat(payForm.amount),
+        method: payForm.method,
+        description: payForm.description || null,
+        status: payForm.status,
+        gym_id: gymId,
+      });
+      if (error) throw error;
+      toast.success("Payment recorded");
+      setPaymentOpen(false);
+      setPayForm({ member_id: "", amount: "", method: "cash", description: "", status: "completed" });
+      fetchData();
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
 
   return (
