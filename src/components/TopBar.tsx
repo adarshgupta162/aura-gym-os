@@ -1,6 +1,5 @@
-import { Search, ChevronDown } from "lucide-react";
+import { Search, Bell, ChevronDown } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { NotificationBell } from "@/components/NotificationBell";
 
 export function TopBar({ sidebarWidth }: { sidebarWidth: number }) {
   const { user, gym, isSuperAdmin, roles } = useAuth();
@@ -45,7 +44,10 @@ export function TopBar({ sidebarWidth }: { sidebarWidth: number }) {
 
       {/* Right */}
       <div className="flex items-center gap-3">
-        <NotificationBell />
+        <button className="relative p-2 rounded-lg hover:bg-surface transition-colors">
+          <Bell className="w-4 h-4 text-muted-foreground" />
+          <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
+        </button>
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
             <span className="text-accent text-xs font-bold">{initials}</span>

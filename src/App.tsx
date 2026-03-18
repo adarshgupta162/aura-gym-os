@@ -18,7 +18,6 @@ import Analytics from "./pages/Analytics";
 import Plans from "./pages/Plans";
 import MemberPortal from "./pages/MemberPortal";
 import SettingsPage from "./pages/Settings";
-import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -42,7 +41,6 @@ const App = () => (
               <Route path="/finance" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Finance /></ProtectedRoute>} />
               <Route path="/analytics" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Analytics /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Plans /></ProtectedRoute>} />
-              <Route path="/notifications" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Notifications /></ProtectedRoute>} />
               <Route path="/my-portal" element={<ProtectedRoute allowedRoles={["member"]}><MemberPortal /></ProtectedRoute>} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
