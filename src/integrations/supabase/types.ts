@@ -14,6 +14,91 @@ export type Database = {
   }
   public: {
     Tables: {
+      notification_preferences: {
+        Row: {
+          churn_risk: boolean
+          created_at: string
+          equipment_maintenance: boolean
+          gym_id: string | null
+          id: string
+          new_member_registration: boolean
+          payment_overdue: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          churn_risk?: boolean
+          created_at?: string
+          equipment_maintenance?: boolean
+          gym_id?: string | null
+          id?: string
+          new_member_registration?: boolean
+          payment_overdue?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          churn_risk?: boolean
+          created_at?: string
+          equipment_maintenance?: boolean
+          gym_id?: string | null
+          id?: string
+          new_member_registration?: boolean
+          payment_overdue?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          gym_id: string
+          id: string
+          is_read: boolean
+          message: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          gym_id: string
+          id?: string
+          is_read?: boolean
+          message: string
+          title: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          gym_id?: string
+          id?: string
+          is_read?: boolean
+          message?: string
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance: {
         Row: {
           audit_note: string | null
