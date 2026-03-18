@@ -16,18 +16,20 @@ import {
   LogOut,
   PersonStanding,
   UserCircle,
+  Bell,
 } from "lucide-react";
 
 const allNavItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard", roles: ["super_admin", "gym_admin"] },
   { to: "/gyms", icon: Building2, label: "Gyms", roles: ["super_admin"] },
-  { to: "/members", icon: Users, label: "Members", roles: ["gym_admin"] },
+  { to: "/members", icon: Users, label: "Members", roles: ["gym_admin", "super_admin"] },
   { to: "/trainers", icon: PersonStanding, label: "Trainers", roles: ["gym_admin"] },
   { to: "/attendance", icon: QrCode, label: "Attendance", roles: ["gym_admin"] },
   { to: "/equipment", icon: Dumbbell, label: "Equipment", roles: ["gym_admin"] },
   { to: "/finance", icon: CreditCard, label: "Finance", roles: ["gym_admin"] },
   { to: "/analytics", icon: BarChart3, label: "Analytics", roles: ["gym_admin"] },
   { to: "/plans", icon: Tags, label: "Plans", roles: ["gym_admin"] },
+  { to: "/notifications", icon: Bell, label: "Notifications", roles: ["gym_admin", "super_admin"] },
   { to: "/my-portal", icon: UserCircle, label: "My Portal", roles: ["member"] },
 ];
 

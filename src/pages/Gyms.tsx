@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusDot } from "@/components/StatusDot";
-import { Building2, Users, DollarSign, Plus, Loader2, CheckCircle, Copy } from "lucide-react";
+import { Building2, Users, DollarSign, Plus, Loader2, CheckCircle, Copy, Power, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
