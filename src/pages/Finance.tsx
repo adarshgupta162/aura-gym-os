@@ -10,10 +10,13 @@ import { toast } from "sonner";
 const Finance = () => {
   const [payments, setPayments] = useState<any[]>([]);
   const [expenses, setExpenses] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ category: "", amount: "", description: "" });
+  const [payForm, setPayForm] = useState({ member_id: "", amount: "", method: "cash", description: "", status: "completed" });
 
   const fetchData = async () => {
     const [payRes, expRes] = await Promise.all([
