@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusDot } from "@/components/StatusDot";
-import { Building2, Users, DollarSign, Plus, Loader2, CheckCircle, Copy } from "lucide-react";
+import { Building2, Users, DollarSign, Plus, Loader2, CheckCircle, Copy, Power, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
@@ -19,6 +19,10 @@ const Gyms = () => {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [credentialsModal, setCredentialsModal] = useState<{ gymName: string; email: string; password: string } | null>(null);
+  const [viewGym, setViewGym] = useState<any>(null);
+  const [viewGymMembers, setViewGymMembers] = useState<any[]>([]);
+  const [viewGymPayments, setViewGymPayments] = useState<any[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
   const [form, setForm] = useState({
     name: "", code: "", city: "", email: "", phone: "",
     primary_color: "#22c55e", secondary_color: "#0a0a0a",
@@ -33,7 +37,28 @@ const Gyms = () => {
 
   useEffect(() => { fetchGyms(); }, []);
 
-  const handleCreate = async () => {
+  const handleToggleActive = async (gym: Gym) => {
+    try {
+      const { error } = await supabase.from("gyms").update({ is_active: !gym.is_active }).eq("id", gym.id);
+      if (error) throw error;
+      toast.success(gym.is_active ? `${gym.name} suspended` : `${gym.name} activated`);
+      fetchGyms();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleViewGym = async (gym: Gym) => {
+    setViewGym(gym);
+    setViewLoading(true);
+    const [memRes, payRes] = await Promise.all([
+      supabase.from("members").select("id, full_name, member_code, status, email").eq("gym_id", gym.id).limit(50),
+      supabase.from("payments").select("amount, status").eq("gym_id", gym.id),
+    ]);
+    setViewGymMembers(memRes.data || []);
+    setViewGymPayments(payRes.data || []);
+    setViewLoading(false);
+  };
+
+
     if (!form.name || !form.code || !form.admin_email || !form.admin_password || !form.admin_name) {
       toast.error("Please fill in all required fields"); return;
     }
@@ -104,6 +129,16 @@ const Gyms = () => {
             { key: "code", header: "Code" },
             { key: "email", header: "Email", render: (row: Gym) => <span>{row.email || "—"}</span> },
             { key: "is_active", header: "Status", render: (row: Gym) => <StatusDot status={row.is_active ? "operational" : "critical"} label={row.is_active ? "active" : "inactive"} /> },
+            { key: "actions", header: "Actions", render: (row: Gym) => (
+              <div className="flex items-center gap-2">
+                <button onClick={() => handleViewGym(row)} className="p-1.5 rounded-lg hover:bg-surface-raised transition-colors" title="View Details">
+                  <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+                <button onClick={() => handleToggleActive(row)} className="p-1.5 rounded-lg hover:bg-surface-raised transition-colors" title={row.is_active ? "Suspend" : "Activate"}>
+                  <Power className={`w-3.5 h-3.5 ${row.is_active ? "text-destructive" : "text-primary"}`} />
+                </button>
+              </div>
+            )},
           ]}
           data={gyms}
         />
@@ -177,6 +212,51 @@ const Gyms = () => {
           )}
           <DialogFooter>
             <button onClick={() => setCredentialsModal(null)} className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">Done</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Gym Dialog */}
+      <Dialog open={!!viewGym} onOpenChange={() => setViewGym(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{viewGym?.name}</DialogTitle>
+            <DialogDescription>Gym details and member overview</DialogDescription>
+          </DialogHeader>
+          {viewLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-surface rounded-lg p-3 text-center">
+                  <p className="text-lg font-bold text-foreground">{viewGymMembers.length}</p>
+                  <p className="text-xs text-muted-foreground">Members</p>
+                </div>
+                <div className="bg-surface rounded-lg p-3 text-center">
+                  <p className="text-lg font-bold text-foreground">{viewGymMembers.filter(m => m.status === "active").length}</p>
+                  <p className="text-xs text-muted-foreground">Active</p>
+                </div>
+                <div className="bg-surface rounded-lg p-3 text-center">
+                  <p className="text-lg font-bold text-foreground">₹{viewGymPayments.filter(p => p.status === "completed").reduce((s: number, p: any) => s + Number(p.amount), 0).toLocaleString("en-IN")}</p>
+                  <p className="text-xs text-muted-foreground">Revenue</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground mb-2">Members</p>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {viewGymMembers.map((m: any) => (
+                    <div key={m.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-surface-raised text-sm">
+                      <span className="text-foreground">{m.full_name} <span className="text-xs text-muted-foreground">({m.member_code})</span></span>
+                      <span className={`text-xs font-medium capitalize ${m.status === "active" ? "text-primary" : m.status === "frozen" ? "text-destructive" : "text-muted-foreground"}`}>{m.status}</span>
+                    </div>
+                  ))}
+                  {viewGymMembers.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No members</p>}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <button onClick={() => setViewGym(null)} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">Close</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
