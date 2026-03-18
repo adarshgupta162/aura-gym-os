@@ -37,7 +37,28 @@ const Gyms = () => {
 
   useEffect(() => { fetchGyms(); }, []);
 
-  const handleCreate = async () => {
+  const handleToggleActive = async (gym: Gym) => {
+    try {
+      const { error } = await supabase.from("gyms").update({ is_active: !gym.is_active }).eq("id", gym.id);
+      if (error) throw error;
+      toast.success(gym.is_active ? `${gym.name} suspended` : `${gym.name} activated`);
+      fetchGyms();
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const handleViewGym = async (gym: Gym) => {
+    setViewGym(gym);
+    setViewLoading(true);
+    const [memRes, payRes] = await Promise.all([
+      supabase.from("members").select("id, full_name, member_code, status, email").eq("gym_id", gym.id).limit(50),
+      supabase.from("payments").select("amount, status").eq("gym_id", gym.id),
+    ]);
+    setViewGymMembers(memRes.data || []);
+    setViewGymPayments(payRes.data || []);
+    setViewLoading(false);
+  };
+
+
     if (!form.name || !form.code || !form.admin_email || !form.admin_password || !form.admin_name) {
       toast.error("Please fill in all required fields"); return;
     }
