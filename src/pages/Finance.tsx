@@ -170,6 +170,7 @@ const Finance = () => {
           <DataTable
             columns={[
               { key: "payment_date", header: "Date", render: (r: any) => <span className="text-xs">{new Date(r.payment_date).toLocaleDateString()}</span> },
+              { key: "member", header: "Member", render: (r: any) => <span className="text-xs">{r.members?.full_name || "—"}</span> },
               { key: "description", header: "Description", render: (r: any) => <span>{r.description || "—"}</span> },
               { key: "method", header: "Method", render: (r: any) => <span className="capitalize text-xs">{r.method}</span> },
               { key: "amount", header: "Amount", render: (r: any) => <span>₹{Number(r.amount).toLocaleString("en-IN")}</span> },
