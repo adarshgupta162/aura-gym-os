@@ -110,6 +110,16 @@ const Gyms = () => {
             { key: "code", header: "Code" },
             { key: "email", header: "Email", render: (row: Gym) => <span>{row.email || "—"}</span> },
             { key: "is_active", header: "Status", render: (row: Gym) => <StatusDot status={row.is_active ? "operational" : "critical"} label={row.is_active ? "active" : "inactive"} /> },
+            { key: "actions", header: "Actions", render: (row: Gym) => (
+              <div className="flex items-center gap-2">
+                <button onClick={() => handleViewGym(row)} className="p-1.5 rounded-lg hover:bg-surface-raised transition-colors" title="View Details">
+                  <Eye className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+                <button onClick={() => handleToggleActive(row)} className="p-1.5 rounded-lg hover:bg-surface-raised transition-colors" title={row.is_active ? "Suspend" : "Activate"}>
+                  <Power className={`w-3.5 h-3.5 ${row.is_active ? "text-destructive" : "text-primary"}`} />
+                </button>
+              </div>
+            )},
           ]}
           data={gyms}
         />
