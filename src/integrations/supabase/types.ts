@@ -197,6 +197,8 @@ export type Database = {
       gyms: {
         Row: {
           address: string | null
+          admin_email: string | null
+          admin_initial_password: string | null
           city: string | null
           code: string
           created_at: string
@@ -212,6 +214,8 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          admin_email?: string | null
+          admin_initial_password?: string | null
           city?: string | null
           code: string
           created_at?: string
@@ -227,6 +231,8 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          admin_email?: string | null
+          admin_initial_password?: string | null
           city?: string | null
           code?: string
           created_at?: string
