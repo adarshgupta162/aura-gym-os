@@ -14,7 +14,7 @@ const SuperAdminDashboard = () => {
   useEffect(() => {
     const fetch = async () => {
       // Auto-freeze expired members across all gyms
-      await supabase.rpc("auto_freeze_expired_members").catch(() => {});
+      try { await supabase.rpc("auto_freeze_expired_members"); } catch {}
 
       const [gymsRes, activeRes] = await Promise.all([
         supabase.from("gyms").select("id, name, code, city, is_active, created_at").order("created_at", { ascending: false }),
