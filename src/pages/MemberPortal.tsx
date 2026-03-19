@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 type Tab = "home" | "attendance" | "workout" | "progress" | "profile";
 
 const MemberPortal = () => {
-  const { user, gym, signOut } = useAuth();
+  const { user, gym } = useAuth();
   const [tab, setTab] = useState<Tab>("home");
   const [member, setMember] = useState<any>(null);
   const [plan, setPlan] = useState<any>(null);
@@ -32,6 +32,8 @@ const MemberPortal = () => {
   const [switchEmail, setSwitchEmail] = useState("");
   const [switchPassword, setSwitchPassword] = useState("");
   const [switching, setSwitching] = useState(false);
+
+  const SAVED_SESSIONS_KEY = "saved_sessions";
 
   useEffect(() => {
     if (!user) return;
@@ -173,23 +175,93 @@ const MemberPortal = () => {
     setWorkouts(workouts.map(w => w.id === id ? { ...w, is_done: !isDone } : w));
   };
 
+  // Save the current user's session tokens so they can switch back without a password
+  const saveCurrentSession = async () => {
+    if (!user?.email) return;
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    if (currentSession) {
+      const savedSessions = JSON.parse(localStorage.getItem(SAVED_SESSIONS_KEY) || "{}");
+      savedSessions[user.email] = {
+        access_token: currentSession.access_token,
+        refresh_token: currentSession.refresh_token,
+      };
+      localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(savedSessions));
+
+      const existingAccounts = JSON.parse(localStorage.getItem("saved_accounts") || "[]");
+      if (!existingAccounts.includes(user.email)) {
+        existingAccounts.push(user.email);
+        localStorage.setItem("saved_accounts", JSON.stringify(existingAccounts));
+      }
+    }
+  };
+
+  // Switch directly to a previously saved account without asking for a password
+  const handleQuickSwitch = async (email: string) => {
+    setSwitching(true);
+    try {
+      await saveCurrentSession();
+
+      const savedSessions = JSON.parse(localStorage.getItem(SAVED_SESSIONS_KEY) || "{}");
+      const savedSession = savedSessions[email];
+
+      if (savedSession) {
+        // Restore the target account's session (replaces the current session without invalidating it)
+        const { error } = await supabase.auth.setSession({
+          access_token: savedSession.access_token,
+          refresh_token: savedSession.refresh_token,
+        });
+        if (!error) {
+          toast.success("Switched account!");
+          window.location.reload();
+          return;
+        }
+        // Stored session expired — remove it and fall through to password dialog
+        const updatedSessions = JSON.parse(localStorage.getItem(SAVED_SESSIONS_KEY) || "{}");
+        delete updatedSessions[email];
+        localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(updatedSessions));
+      }
+
+      // Fallback: pre-fill email and prompt for password
+      setSwitchEmail(email);
+      setSwitchOpen(true);
+    } catch (err: any) { toast.error("Failed to switch accounts. Please try again."); }
+    finally { setSwitching(false); }
+  };
+
   const handleSwitchAccount = async () => {
     if (!switchEmail || !switchPassword) { toast.error("Enter credentials"); return; }
     setSwitching(true);
     try {
-      // Store current account info
-      const savedAccounts = JSON.parse(localStorage.getItem("saved_accounts") || "[]");
-      if (user?.email && !savedAccounts.includes(user.email)) {
-        savedAccounts.push(user.email);
-        localStorage.setItem("saved_accounts", JSON.stringify(savedAccounts));
-      }
-      await signOut();
-      const { error } = await supabase.auth.signInWithPassword({ email: switchEmail, password: switchPassword });
+      // Save current session so the user can switch back later without a password
+      await saveCurrentSession();
+
+      // Attempt password sign-in; Supabase will replace the current session if successful
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: switchEmail,
+        password: switchPassword,
+      });
       if (error) throw error;
+
+      // Persist the new account's session for future quick switching
+      if (data.session) {
+        const savedSessions = JSON.parse(localStorage.getItem(SAVED_SESSIONS_KEY) || "{}");
+        savedSessions[switchEmail] = {
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        };
+        localStorage.setItem(SAVED_SESSIONS_KEY, JSON.stringify(savedSessions));
+      }
+
+      const existingAccounts = JSON.parse(localStorage.getItem("saved_accounts") || "[]");
+      if (!existingAccounts.includes(switchEmail)) {
+        existingAccounts.push(switchEmail);
+        localStorage.setItem("saved_accounts", JSON.stringify(existingAccounts));
+      }
+
       toast.success("Switched account!");
       setSwitchOpen(false);
       window.location.reload();
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: any) { toast.error(err.message || "Failed to sign in. Please check your credentials."); }
     finally { setSwitching(false); }
   };
 
@@ -541,14 +613,15 @@ const MemberPortal = () => {
             {savedAccounts.length > 0 && (
               <div className="space-y-1 mb-3">
                 {savedAccounts.map((email: string) => (
-                  <button key={email} onClick={() => { setSwitchEmail(email); setSwitchOpen(true); }}
-                    className="w-full text-left px-3 py-2 rounded-lg bg-surface hover:bg-surface-raised text-sm text-foreground transition-colors">
-                    {email}
+                  <button key={email} onClick={() => handleQuickSwitch(email)} disabled={switching}
+                    className="w-full text-left px-3 py-2 rounded-lg bg-surface hover:bg-surface-raised text-sm text-foreground transition-colors flex items-center justify-between disabled:opacity-50">
+                    <span>{email}</span>
+                    {switching ? <Loader2 className="w-3 h-3 animate-spin" /> : <ArrowRightLeft className="w-3 h-3 text-muted-foreground" />}
                   </button>
                 ))}
               </div>
             )}
-            <button onClick={() => setSwitchOpen(true)} className="w-full py-2.5 bg-accent/10 text-accent rounded-lg text-sm font-medium hover:bg-accent/20 min-h-[48px]">
+            <button onClick={() => { setSwitchEmail(""); setSwitchPassword(""); setSwitchOpen(true); }} className="w-full py-2.5 bg-accent/10 text-accent rounded-lg text-sm font-medium hover:bg-accent/20 min-h-[48px]">
               Switch to Another Account
             </button>
           </div>
@@ -599,7 +672,7 @@ const MemberPortal = () => {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Switch Account</DialogTitle>
-            <DialogDescription>Enter credentials for the account you want to switch to.</DialogDescription>
+            <DialogDescription>Enter credentials to switch to this account.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div>
