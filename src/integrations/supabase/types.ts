@@ -360,6 +360,76 @@ export type Database = {
           },
         ]
       }
+      notification_recipients: {
+        Row: {
+          created_at: string
+          id: string
+          notification_id: string
+          read_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          notification_id: string
+          read_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          notification_id?: string
+          read_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_recipients_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          created_by: string
+          gym_id: string
+          id: string
+          message: string
+          target_type: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          gym_id: string
+          id?: string
+          message: string
+          target_type?: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          gym_id?: string
+          id?: string
+          message?: string
+          target_type?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount: number
@@ -704,6 +774,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      auto_freeze_expired_members: { Args: never; Returns: undefined }
       get_user_gym_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
