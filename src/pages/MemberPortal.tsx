@@ -235,10 +235,11 @@ const MemberPortal = () => {
       // Save current session so the user can switch back later without a password
       await saveCurrentSession();
 
-      // Sign out locally only to preserve the current user's refresh token
-      await supabase.auth.signOut({ scope: "local" });
-
-      const { data, error } = await supabase.auth.signInWithPassword({ email: switchEmail, password: switchPassword });
+      // Attempt password sign-in; Supabase will replace the current session if successful
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: switchEmail,
+        password: switchPassword,
+      });
       if (error) throw error;
 
       // Persist the new account's session for future quick switching
