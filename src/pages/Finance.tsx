@@ -1,11 +1,27 @@
 import { useEffect, useState } from "react";
 import { MetricCard } from "@/components/MetricCard";
 import { DataTable } from "@/components/DataTable";
-import { DollarSign, TrendingUp, TrendingDown, CreditCard, Plus, Loader2 } from "lucide-react";
+import { InvoiceModal } from "@/components/InvoiceModal";
+import { DollarSign, TrendingUp, TrendingDown, CreditCard, Plus, Loader2, FileText } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
+
+interface GymFull {
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  logo_url: string | null;
+  city: string | null;
+}
+
+interface InvoiceData {
+  gym: GymFull;
+  member: { full_name: string; member_code: string; phone: string | null; email: string | null };
+  payment: { id: string; amount: number; method: string; description: string | null; status: string; payment_date: string };
+}
 
 const Finance = () => {
   const [payments, setPayments] = useState<any[]>([]);
@@ -17,12 +33,13 @@ const Finance = () => {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ category: "", amount: "", description: "" });
   const [payForm, setPayForm] = useState({ member_id: "", amount: "", method: "cash", description: "", status: "completed" });
+  const [invoiceData, setInvoiceData] = useState<InvoiceData | null>(null);
 
   const fetchData = async () => {
     const [payRes, expRes, memRes] = await Promise.all([
       supabase.from("payments").select("*, members(full_name, member_code)").order("payment_date", { ascending: false }),
       supabase.from("expenses").select("*").order("expense_date", { ascending: false }),
-      supabase.from("members").select("id, full_name, member_code").eq("status", "active"),
+      supabase.from("members").select("id, full_name, member_code, phone, email").eq("status", "active"),
     ]);
     setPayments(payRes.data || []);
     setExpenses(expRes.data || []);
@@ -91,17 +108,46 @@ const Finance = () => {
       const { data: gymId } = await supabase.rpc("get_user_gym_id", { _user_id: user.id });
       if (!gymId) throw new Error("No gym assigned");
 
-      const { error } = await supabase.from("payments").insert({
+      const { data: insertedPayments, error } = await supabase.from("payments").insert({
         member_id: payForm.member_id,
         amount: parseFloat(payForm.amount),
         method: payForm.method,
         description: payForm.description || null,
         status: payForm.status,
         gym_id: gymId,
-      });
+      }).select("*").single();
       if (error) throw error;
       toast.success("Payment recorded");
       setPaymentOpen(false);
+
+      // Fetch gym details and member details for the invoice
+      const selectedMember = members.find((m) => m.id === payForm.member_id);
+      const { data: gymData } = await supabase
+        .from("gyms")
+        .select("name, address, phone, email, logo_url, city")
+        .eq("id", gymId)
+        .single();
+
+      if (insertedPayments && selectedMember && gymData) {
+        setInvoiceData({
+          gym: gymData as GymFull,
+          member: {
+            full_name: selectedMember.full_name,
+            member_code: selectedMember.member_code,
+            phone: selectedMember.phone || null,
+            email: selectedMember.email || null,
+          },
+          payment: {
+            id: insertedPayments.id,
+            amount: insertedPayments.amount,
+            method: insertedPayments.method,
+            description: insertedPayments.description || null,
+            status: insertedPayments.status,
+            payment_date: insertedPayments.payment_date,
+          },
+        });
+      }
+
       setPayForm({ member_id: "", amount: "", method: "cash", description: "", status: "completed" });
       fetchData();
     } catch (err: any) {
@@ -175,6 +221,34 @@ const Finance = () => {
               { key: "method", header: "Method", render: (r: any) => <span className="capitalize text-xs">{r.method}</span> },
               { key: "amount", header: "Amount", render: (r: any) => <span>₹{Number(r.amount).toLocaleString("en-IN")}</span> },
               { key: "status", header: "Status", render: (r: any) => <span className={`text-xs font-medium ${r.status === "completed" ? "text-primary" : "text-destructive"}`}>{r.status}</span> },
+              {
+                key: "invoice",
+                header: "",
+                render: (r: any) => (
+                  <button
+                    title="View Invoice"
+                    onClick={async () => {
+                      if (!r.member_id) return;
+                      const { data: gymId } = await supabase.rpc("get_user_gym_id", { _user_id: (await supabase.auth.getUser()).data.user?.id });
+                      if (!gymId) return;
+                      const [{ data: gymData }, { data: memberData }] = await Promise.all([
+                        supabase.from("gyms").select("name, address, phone, email, logo_url, city").eq("id", gymId).single(),
+                        supabase.from("members").select("full_name, member_code, phone, email").eq("id", r.member_id).single(),
+                      ]);
+                      if (gymData && memberData) {
+                        setInvoiceData({
+                          gym: gymData as GymFull,
+                          member: memberData as { full_name: string; member_code: string; phone: string | null; email: string | null },
+                          payment: { id: r.id, amount: r.amount, method: r.method, description: r.description || null, status: r.status, payment_date: r.payment_date },
+                        });
+                      }
+                    }}
+                    className="p-1 text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    <FileText className="w-4 h-4" />
+                  </button>
+                ),
+              },
             ]}
             data={payments.slice(0, 10)}
           />
@@ -285,6 +359,17 @@ const Finance = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Invoice Modal */}
+      {invoiceData && (
+        <InvoiceModal
+          open={!!invoiceData}
+          onClose={() => setInvoiceData(null)}
+          gym={invoiceData.gym}
+          member={invoiceData.member}
+          payment={invoiceData.payment}
+        />
+      )}
     </div>
   );
 };
