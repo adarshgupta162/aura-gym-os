@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { CSSProperties } from "react";
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { TopBar } from "./TopBar";
@@ -34,7 +35,10 @@ export function AppLayout() {
     .slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div
+      className="min-h-screen bg-background"
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+    >
       {!isMobile && (
         <AppSidebar
           collapsed={sidebarCollapsed}
@@ -50,7 +54,7 @@ export function AppLayout() {
           <Outlet />
         </div>
       </main>
-      {isMobile && (
+      {isMobile && activeRole !== "member" && (
         <nav className="fixed bottom-0 left-0 right-0 z-50 bg-card border-t border-border flex items-center justify-around px-1 py-1">
           {visibleMobileNav.map(item => {
             const isActive = location.pathname === item.to;
