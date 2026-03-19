@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusDot } from "@/components/StatusDot";
-import { Users, UserPlus, UserMinus, Search, Plus, Loader2, Pencil, Trash2, CheckCircle, Copy } from "lucide-react";
+import { Users, UserPlus, UserMinus, Search, Plus, Loader2, Pencil, Trash2, CheckCircle, Copy, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";

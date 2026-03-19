@@ -62,7 +62,7 @@ const GymAdminDashboard = () => {
   useEffect(() => {
     const fetch = async () => {
       // Auto-freeze expired members
-      await supabase.rpc("auto_freeze_expired_members").catch(() => {});
+      try { await supabase.rpc("auto_freeze_expired_members"); } catch {}
 
       const [membersRes, trainersRes, equipRes, alertsRes, recentRes, paymentsRes] = await Promise.all([
         supabase.from("members").select("*", { count: "exact", head: true }),
