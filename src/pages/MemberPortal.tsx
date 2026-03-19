@@ -65,6 +65,30 @@ const MemberPortal = () => {
     fetchAll();
   }, [user]);
 
+  const toggleAttendance = async (method: "daily_code" | "qr") => {
+    if (!member) return;
+    const today = new Date().toISOString().split("T")[0];
+    const { data: openSession } = await supabase
+      .from("attendance")
+      .select("id")
+      .eq("member_id", member.id)
+      .eq("date", today)
+      .is("check_out", null)
+      .limit(1);
+
+    if (openSession && openSession.length > 0) {
+      await supabase.from("attendance").update({ check_out: new Date().toISOString() }).eq("id", openSession[0].id);
+      toast.success(method === "qr" ? "QR Check-out successful! 👋" : "Checked out! 👋");
+    } else {
+      await supabase.from("attendance").insert({
+        member_id: member.id, gym_id: member.gym_id, method, date: today,
+      });
+      toast.success(method === "qr" ? "QR Check-in successful! 🎉" : "Checked in! 🎉");
+    }
+    const { data: attRes } = await supabase.from("attendance").select("*").eq("member_id", member.id).order("check_in", { ascending: false }).limit(100);
+    setAttendance(attRes || []);
+  };
+
   const handleDailyCodeCheckin = async () => {
     if (!dailyCodeInput.trim() || !member) return;
     setCheckingIn(true);
@@ -74,13 +98,8 @@ const MemberPortal = () => {
       const { data: codeData } = await supabase.from("daily_codes").select("*").eq("gym_id", member.gym_id).eq("date", today).eq("code", dailyCodeInput.trim()).single();
       if (!codeData) { toast.error("Invalid code for today"); return; }
 
-      await supabase.from("attendance").insert({
-        member_id: member.id, gym_id: member.gym_id, method: "daily_code", date: today,
-      });
-      toast.success("Checked in! 🎉");
+      await toggleAttendance("daily_code");
       setDailyCodeInput("");
-      const { data: attRes } = await supabase.from("attendance").select("*").eq("member_id", member.id).order("check_in", { ascending: false }).limit(100);
-      setAttendance(attRes || []);
     } catch (err: any) { toast.error(err.message); }
     finally { setCheckingIn(false); }
   };
@@ -101,12 +120,8 @@ const MemberPortal = () => {
           const today = new Date().toISOString().split("T")[0];
           const { data: codeData } = await supabase.from("daily_codes").select("*").eq("gym_id", member.gym_id).eq("date", today).eq("qr_token", decodedText).single();
           if (!codeData) { toast.error("Invalid or expired QR code"); return; }
-          await supabase.from("attendance").insert({
-            member_id: member.id, gym_id: member.gym_id, method: "qr", date: today,
-          });
-          toast.success("QR Check-in successful! 🎉");
-          const { data: attRes } = await supabase.from("attendance").select("*").eq("member_id", member.id).order("check_in", { ascending: false }).limit(100);
-          setAttendance(attRes || []);
+
+          await toggleAttendance("qr");
         },
         () => {}
       );
@@ -220,7 +235,7 @@ const MemberPortal = () => {
   const savedAccounts = JSON.parse(localStorage.getItem("saved_accounts") || "[]").filter((e: string) => e !== user?.email);
 
   return (
-    <div className="pb-20 md:pb-0">
+    <div className="pb-20 md:pb-0 md:pt-12">
       {tab === "home" && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
@@ -570,7 +585,7 @@ const MemberPortal = () => {
       </nav>
 
       {/* Desktop Tab Switcher */}
-      <div className="hidden md:flex fixed top-16 right-0 left-[240px] bg-card border-b border-border z-30 px-6">
+      <div className="hidden md:flex fixed top-16 right-0 bg-card border-b border-border z-30 px-6" style={{ left: "var(--sidebar-width, 240px)" }}>
         {tabs.map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
