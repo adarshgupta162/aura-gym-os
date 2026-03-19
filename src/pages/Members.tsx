@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { DataTable } from "@/components/DataTable";
 import { MetricCard } from "@/components/MetricCard";
 import { StatusDot } from "@/components/StatusDot";
-import { Users, UserPlus, UserMinus, Search, Plus, Loader2, Pencil, Trash2, CheckCircle, Copy, Eye } from "lucide-react";
+import { AddMemberModal } from "@/components/AddMemberModal";
+import { Users, UserPlus, UserMinus, Search, Plus, Loader2, Pencil, Trash2, CheckCircle, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -24,19 +25,22 @@ const Members = () => {
   const [plans, setPlans] = useState<PlanInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
+  // Add modal (multi-step)
+  const [addOpen, setAddOpen] = useState(false);
+  const [nextCode, setNextCode] = useState("");
+  // Edit modal (simple)
   const [editItem, setEditItem] = useState<Member | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    full_name: "", phone: "", email: "", weight: "",
+    plan_id: "", trainer_id: "", due_date: "", status: "active",
+  });
   const [deleteItem, setDeleteItem] = useState<Member | null>(null);
   const [saving, setSaving] = useState(false);
-  const [nextCode, setNextCode] = useState("");
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [pendingMember, setPendingMember] = useState<{ name: string; planId: string } | null>(null);
   const [credentialsModal, setCredentialsModal] = useState<{ code: string; email: string; password: string } | null>(null);
-  const [form, setForm] = useState({
-    full_name: "", phone: "", email: "", weight: "", password: "",
-    plan_id: "", trainer_id: "", due_date: "", status: "active",
-  });
 
   const fetchData = async () => {
     const [membersRes, trainersRes, plansRes] = await Promise.all([
@@ -58,91 +62,53 @@ const Members = () => {
     return `${gym.code}M${String((count || 0) + 1).padStart(4, "0")}`;
   };
 
-  const resetForm = () => {
-    setForm({ full_name: "", phone: "", email: "", weight: "", password: "", plan_id: "", trainer_id: "", due_date: "", status: "active" });
-    setNextCode("");
+  const resetEditForm = () => {
+    setEditForm({ full_name: "", phone: "", email: "", weight: "", plan_id: "", trainer_id: "", due_date: "", status: "active" });
     setEditItem(null);
   };
 
   const openAdd = async () => {
-    resetForm();
     const code = await generateMemberCode();
     setNextCode(code);
-    setOpen(true);
+    setAddOpen(true);
   };
 
   const openEdit = (m: Member) => {
     setEditItem(m);
-    setForm({
+    setEditForm({
       full_name: m.full_name, phone: m.phone || "", email: m.email || "",
-      weight: m.weight || "", password: "", plan_id: m.plan_id || "",
+      weight: m.weight || "", plan_id: m.plan_id || "",
       trainer_id: m.trainer_id || "", due_date: m.due_date || "", status: m.status,
     });
-    setOpen(true);
+    setEditOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!form.full_name) { toast.error("Name is required"); return; }
-    if (!editItem && !form.email) { toast.error("Email is required for new members"); return; }
-    if (!editItem && !form.password) { toast.error("Password is required"); return; }
-    if (!gym) { toast.error("No gym context found"); return; }
+  const handleAddSuccess = (credentials: { code: string; email: string; password: string }, planId: string, memberName: string) => {
+    setCredentialsModal(credentials);
+    // Store pending payment info; payment modal opens after credentials modal is dismissed
+    const selectedPlan = plans.find((p) => p.id === planId);
+    if (selectedPlan) {
+      setPendingMember({ name: memberName, planId: selectedPlan.id });
+    }
+    fetchData();
+  };
 
+  const handleEditSave = async () => {
+    if (!editItem || !editForm.full_name) { toast.error("Name is required"); return; }
     setSaving(true);
     try {
-      if (editItem) {
-        const { error } = await supabase.from("members").update({
-          full_name: form.full_name, phone: form.phone || null, email: form.email || null,
-          weight: form.weight || null, plan_id: form.plan_id || null,
-          trainer_id: form.trainer_id || null, due_date: form.due_date || null, status: form.status,
-        }).eq("id", editItem.id);
-        if (error) throw error;
-        toast.success("Member updated");
-      } else {
-        const code = nextCode || await generateMemberCode();
-        const selectedPlan = plans.find(p => p.id === form.plan_id);
-        let dueDate = form.due_date;
-        if (selectedPlan && !dueDate) {
-          const d = new Date();
-          d.setDate(d.getDate() + selectedPlan.duration_days);
-          dueDate = d.toISOString().split("T")[0];
-        }
-
-        // Create auth account via edge function
-        const res = await supabase.functions.invoke("create-user", {
-          body: {
-            email: form.email, password: form.password,
-            full_name: form.full_name, role: "member", gym_id: gym.id,
-          },
-        });
-        if (res.error) throw new Error(res.error.message || "Failed to create account");
-        if (res.data?.error) throw new Error(res.data.error);
-
-        const userId = res.data?.user_id;
-
-        const { error } = await supabase.from("members").insert({
-          member_code: code, full_name: form.full_name,
-          phone: form.phone || null, email: form.email || null,
-          weight: form.weight || null, gym_id: gym.id,
-          plan_id: form.plan_id || null, trainer_id: form.trainer_id || null,
-          due_date: dueDate || null, user_id: userId || null,
-        });
-        if (error) throw error;
-
-        // If plan selected, prompt payment
-        if (selectedPlan) {
-          setPendingMember({ name: form.full_name, planId: selectedPlan.id });
-          setPaymentOpen(true);
-        }
-
-        // Show credentials
-        setCredentialsModal({ code, email: form.email, password: form.password });
-        toast.success(`Member ${code} created`);
-      }
-      setOpen(false);
-      resetForm();
+      const { error } = await supabase.from("members").update({
+        full_name: editForm.full_name, phone: editForm.phone || null, email: editForm.email || null,
+        weight: editForm.weight || null, plan_id: editForm.plan_id || null,
+        trainer_id: editForm.trainer_id || null, due_date: editForm.due_date || null, status: editForm.status,
+      }).eq("id", editItem.id);
+      if (error) throw error;
+      toast.success("Member updated");
+      setEditOpen(false);
+      resetEditForm();
       fetchData();
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error((err as Error).message);
     } finally { setSaving(false); }
   };
 
@@ -160,7 +126,7 @@ const Members = () => {
       });
       if (error) throw error;
       toast.success(`Payment of ₹${plan.price.toLocaleString("en-IN")} recorded`);
-    } catch (err: any) { toast.error(err.message); }
+    } catch (err: unknown) { toast.error((err as Error).message); }
     finally { setPaymentOpen(false); setPendingMember(null); setPaymentMethod("cash"); setSaving(false); }
   };
 
@@ -173,7 +139,7 @@ const Members = () => {
       toast.success(`${deleteItem.full_name} removed`);
       setDeleteItem(null);
       fetchData();
-    } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
+    } catch (err: unknown) { toast.error((err as Error).message); } finally { setSaving(false); }
   };
 
   const copyText = (text: string) => { navigator.clipboard.writeText(text); toast.success("Copied!"); };
@@ -236,61 +202,60 @@ const Members = () => {
         />
       )}
 
-      {/* Add/Edit Modal */}
-      <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); setOpen(v); }}>
+      {/* Add Member - Multi-step Modal */}
+      <AddMemberModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSuccess={handleAddSuccess}
+        trainers={trainers}
+        plans={plans}
+        gym={gym}
+        nextCode={nextCode}
+      />
+
+      {/* Edit Member Modal */}
+      <Dialog open={editOpen} onOpenChange={(v) => { if (!v) { setEditOpen(false); resetEditForm(); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editItem ? "Edit Member" : "Add New Member"}</DialogTitle>
-            <DialogDescription>
-              {editItem ? `Editing ${editItem.member_code}` : nextCode ? `Member Code: ${nextCode} · Gym: ${gym?.name || ""}` : "Loading..."}
-            </DialogDescription>
+            <DialogTitle>Edit Member</DialogTitle>
+            <DialogDescription>{editItem ? `Editing ${editItem.member_code}` : ""}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-label mb-1 block">Full Name *</label><input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Arjun Patel" /></div>
-              <div><label className="text-label mb-1 block">Phone</label><input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="9876543210" /></div>
+              <div><label className="text-label mb-1 block">Full Name *</label><input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} placeholder="Arjun Patel" /></div>
+              <div><label className="text-label mb-1 block">Phone</label><input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} placeholder="9876543210" /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-label mb-1 block">Email *</label><input type="email" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="arjun@email.com" /></div>
-              {!editItem && (
-                <div><label className="text-label mb-1 block">Password *</label><input type="password" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Temporary password" /></div>
-              )}
-              {editItem && (
-                <div><label className="text-label mb-1 block">Weight</label><input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} placeholder="78kg" /></div>
-              )}
+              <div><label className="text-label mb-1 block">Email</label><input type="email" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} placeholder="arjun@email.com" /></div>
+              <div><label className="text-label mb-1 block">Weight (kg)</label><input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={editForm.weight} onChange={(e) => setEditForm({ ...editForm, weight: e.target.value })} placeholder="78" /></div>
             </div>
-            {!editItem && (
-              <div><label className="text-label mb-1 block">Weight</label><input className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} placeholder="78kg" /></div>
-            )}
             <div className="grid grid-cols-2 gap-3">
               <div><label className="text-label mb-1 block">Plan</label>
-                <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })}>
+                <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={editForm.plan_id} onChange={(e) => setEditForm({ ...editForm, plan_id: e.target.value })}>
                   <option value="">No plan</option>
                   {plans.map((p) => <option key={p.id} value={p.id}>{p.name} (₹{p.price})</option>)}
                 </select>
               </div>
               <div><label className="text-label mb-1 block">Trainer</label>
-                <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.trainer_id} onChange={(e) => setForm({ ...form, trainer_id: e.target.value })}>
+                <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={editForm.trainer_id} onChange={(e) => setEditForm({ ...editForm, trainer_id: e.target.value })}>
                   <option value="">No trainer</option>
                   {trainers.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
                 </select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="text-label mb-1 block">Due Date</label><input type="date" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} /></div>
-              {editItem && (
-                <div><label className="text-label mb-1 block">Status</label>
-                  <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                    <option value="active">Active</option><option value="expiring">Expiring</option><option value="overdue">Overdue</option><option value="inactive">Inactive</option>
-                  </select>
-                </div>
-              )}
+              <div><label className="text-label mb-1 block">Due Date</label><input type="date" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={editForm.due_date} onChange={(e) => setEditForm({ ...editForm, due_date: e.target.value })} /></div>
+              <div><label className="text-label mb-1 block">Status</label>
+                <select className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
+                  <option value="active">Active</option><option value="expiring">Expiring</option><option value="overdue">Overdue</option><option value="inactive">Inactive</option>
+                </select>
+              </div>
             </div>
           </div>
           <DialogFooter>
-            <button onClick={() => { setOpen(false); resetForm(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
-            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
-              {saving && <Loader2 className="w-4 h-4 animate-spin" />} {editItem ? "Save Changes" : "Add Member"}
+            <button onClick={() => { setEditOpen(false); resetEditForm(); }} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors">Cancel</button>
+            <button onClick={handleEditSave} disabled={saving} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} Save Changes
             </button>
           </DialogFooter>
         </DialogContent>
@@ -323,7 +288,7 @@ const Members = () => {
             </div>
           )}
           <DialogFooter>
-            <button onClick={() => setCredentialsModal(null)} className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">Done</button>
+            <button onClick={() => { setCredentialsModal(null); if (pendingMember) setPaymentOpen(true); }} className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors">Done</button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
