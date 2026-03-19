@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, Calendar, CreditCard, BarChart3, Pencil, Snowflake, RefreshCw } from "lucide-react";
+import { Loader2, ArrowLeft, Calendar, CreditCard, BarChart3, Pencil, Snowflake, RefreshCw, CalendarPlus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 const MemberProfile = () => {
@@ -19,6 +19,8 @@ const MemberProfile = () => {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ status: "", plan_id: "", trainer_id: "", due_date: "", weight: "" });
   const [activeTab, setActiveTab] = useState<"overview" | "attendance" | "payments" | "progress">("overview");
+  const [extendOpen, setExtendOpen] = useState(false);
+  const [extendForm, setExtendForm] = useState({ plan_id: "", start_date: new Date().toISOString().split("T")[0], discounted_price: "", payment_method: "cash" });
 
   useEffect(() => {
     if (!id) return;
@@ -98,6 +100,53 @@ const MemberProfile = () => {
     finally { setSaving(false); }
   };
 
+  const calcExtendedDue = (startDateStr: string, durationDays: number): string => {
+    const [year, month, day] = startDateStr.split("-").map(Number);
+    const d = new Date(year, month - 1, day + durationDays);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+
+  const handleExtend = async () => {
+    if (!id || !member) return;
+    const selectedPlan = plans.find(p => p.id === extendForm.plan_id);
+    if (!selectedPlan) { toast.error("Please select a plan"); return; }
+    const discounted = parseFloat(extendForm.discounted_price);
+    if (isNaN(discounted) || discounted < 0) { toast.error("Enter a valid discounted price"); return; }
+    setSaving(true);
+    try {
+      const newDue = calcExtendedDue(extendForm.start_date, selectedPlan.duration_days);
+      const newStatus = member.status === "frozen" ? "active" : member.status;
+      const { error: updateError } = await supabase.from("members").update({
+        plan_id: selectedPlan.id,
+        due_date: newDue,
+        status: newStatus,
+      }).eq("id", id);
+      if (updateError) throw updateError;
+      const { error: payError } = await supabase.from("payments").insert({
+        gym_id: member.gym_id,
+        member_id: id,
+        amount: discounted,
+        method: extendForm.payment_method,
+        status: "completed",
+        description: `Subscription extended – ${selectedPlan.name} (${selectedPlan.duration_days} days)`,
+      });
+      if (payError) throw payError;
+      toast.success("Subscription extended successfully");
+      setExtendOpen(false);
+      // Refresh member & payments
+      const [memberRes, payRes] = await Promise.all([
+        supabase.from("members").select("*, plans(name, price, duration_days), trainers(full_name, specialization)").eq("id", id).single(),
+        supabase.from("payments").select("*").eq("member_id", id).order("payment_date", { ascending: false }),
+      ]);
+      if (memberRes.data) {
+        setMember(memberRes.data);
+        setForm({ status: memberRes.data.status, plan_id: memberRes.data.plan_id || "", trainer_id: memberRes.data.trainer_id || "", due_date: memberRes.data.due_date || "", weight: memberRes.data.weight || "" });
+      }
+      setPayments(payRes.data || []);
+    } catch (err: any) { toast.error(err.message); }
+    finally { setSaving(false); }
+  };
+
   if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   if (!member) return <div className="text-center py-12 text-muted-foreground">Member not found</div>;
 
@@ -145,6 +194,15 @@ const MemberProfile = () => {
               <RefreshCw className="w-3.5 h-3.5" /> Renew
             </button>
           )}
+          <button
+            onClick={() => {
+              setExtendForm({ plan_id: member.plan_id || "", start_date: new Date().toISOString().split("T")[0], discounted_price: member.plans?.price?.toString() || "", payment_method: "cash" });
+              setExtendOpen(true);
+            }}
+            className="px-3 py-2 bg-primary/10 text-primary rounded-lg text-xs font-medium hover:bg-primary/20 flex items-center gap-1"
+          >
+            <CalendarPlus className="w-3.5 h-3.5" /> Extend
+          </button>
           <button onClick={() => setEditOpen(true)} className="px-3 py-2 bg-surface-raised rounded-lg text-xs font-medium text-foreground hover:bg-surface flex items-center gap-1">
             <Pencil className="w-3.5 h-3.5" /> Edit
           </button>
@@ -255,6 +313,122 @@ const MemberProfile = () => {
           )}
         </div>
       )}
+
+      {/* Extend Subscription Dialog */}
+      <Dialog open={extendOpen} onOpenChange={setExtendOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Extend Subscription</DialogTitle>
+            <DialogDescription>Choose a plan and start date to extend {member.full_name}'s membership.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-label mb-1 block">Plan</label>
+              <select
+                className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground"
+                value={extendForm.plan_id}
+                onChange={(e) => {
+                  const p = plans.find(pl => pl.id === e.target.value);
+                  setExtendForm({ ...extendForm, plan_id: e.target.value, discounted_price: p ? p.price.toString() : extendForm.discounted_price });
+                }}
+              >
+                <option value="">Select a plan</option>
+                {plans.map(p => (
+                  <option key={p.id} value={p.id}>{p.name} – {p.duration_days} days</option>
+                ))}
+              </select>
+            </div>
+            {extendForm.plan_id && (() => {
+              const selectedPlan = plans.find(p => p.id === extendForm.plan_id);
+              return selectedPlan ? (
+                <div className="bg-surface-raised rounded-lg px-4 py-3 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Plan Price</span>
+                    <span className="font-semibold text-foreground">₹{selectedPlan.price.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Duration</span>
+                    <span>{selectedPlan.duration_days} days</span>
+                  </div>
+                </div>
+              ) : null;
+            })()}
+            <div>
+              <label className="text-label mb-1 block">Start Date</label>
+              <input
+                type="date"
+                className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground"
+                value={extendForm.start_date}
+                onChange={(e) => setExtendForm({ ...extendForm, start_date: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Amount Collected (Discounted Price ₹)</label>
+              <input
+                type="number"
+                min="0"
+                className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground"
+                placeholder="Enter actual collected amount"
+                value={extendForm.discounted_price}
+                onChange={(e) => setExtendForm({ ...extendForm, discounted_price: e.target.value })}
+              />
+              {extendForm.plan_id && (() => {
+                const selectedPlan = plans.find(p => p.id === extendForm.plan_id);
+                const disc = parseFloat(extendForm.discounted_price);
+                if (selectedPlan && !isNaN(disc) && disc < selectedPlan.price) {
+                  return (
+                    <p className="text-xs text-accent mt-1">
+                      Discount: ₹{(selectedPlan.price - disc).toLocaleString("en-IN")} off
+                    </p>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+            <div>
+              <label className="text-label mb-2 block">Payment Method</label>
+              <div className="grid grid-cols-3 gap-2">
+                {["cash", "upi", "card"].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setExtendForm({ ...extendForm, payment_method: m })}
+                    className={`py-2.5 rounded-lg text-sm font-medium transition-colors border ${
+                      extendForm.payment_method === m
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-surface text-muted-foreground border-border hover:border-accent"
+                    }`}
+                  >
+                    {m.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {extendForm.plan_id && extendForm.start_date && (() => {
+              const selectedPlan = plans.find(p => p.id === extendForm.plan_id);
+              if (!selectedPlan) return null;
+              const newDue = calcExtendedDue(extendForm.start_date, selectedPlan.duration_days);
+              const [y, mo, d] = newDue.split("-").map(Number);
+              const displayDate = new Date(y, mo - 1, d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+              return (
+                <p className="text-xs text-muted-foreground text-center">
+                  New expiry: <span className="font-medium text-foreground">{displayDate}</span>
+                </p>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <button onClick={() => setExtendOpen(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+            <button
+              onClick={handleExtend}
+              disabled={saving || !extendForm.plan_id}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} Extend & Pay
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
