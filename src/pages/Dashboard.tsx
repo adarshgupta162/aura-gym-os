@@ -13,6 +13,9 @@ const SuperAdminDashboard = () => {
 
   useEffect(() => {
     const fetch = async () => {
+      // Auto-freeze expired members across all gyms
+      await supabase.rpc("auto_freeze_expired_members").catch(() => {});
+
       const [gymsRes, activeRes] = await Promise.all([
         supabase.from("gyms").select("id, name, code, city, is_active, created_at").order("created_at", { ascending: false }),
         supabase.from("gyms").select("*", { count: "exact", head: true }).eq("is_active", true),
@@ -51,12 +54,16 @@ const SuperAdminDashboard = () => {
 };
 
 const GymAdminDashboard = () => {
+  const { gym } = useAuth();
   const [stats, setStats] = useState({ members: 0, trainers: 0, equipment: 0, alerts: 0, revenue: 0 });
   const [recentMembers, setRecentMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetch = async () => {
+      // Auto-freeze expired members
+      await supabase.rpc("auto_freeze_expired_members").catch(() => {});
+
       const [membersRes, trainersRes, equipRes, alertsRes, recentRes, paymentsRes] = await Promise.all([
         supabase.from("members").select("*", { count: "exact", head: true }),
         supabase.from("trainers").select("*", { count: "exact", head: true }),
@@ -90,7 +97,7 @@ const GymAdminDashboard = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold text-foreground">Gym Dashboard</h1>
+        <h1 className="text-lg font-semibold text-foreground">{gym?.name || "Gym"} Dashboard</h1>
         <p className="text-sm text-muted-foreground">{stats.members} Members · {stats.trainers} Trainers</p>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

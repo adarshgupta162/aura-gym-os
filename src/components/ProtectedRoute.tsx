@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface ProtectedRouteProps {
@@ -7,7 +7,8 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { user, loading, roles, rolesLoaded } = useAuth();
+  const { user, loading, roles, rolesLoaded, activeRole } = useAuth();
+  const location = useLocation();
 
   if (loading || !rolesLoaded) {
     return (
@@ -18,6 +19,11 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   if (!user) return <Navigate to="/login" replace />;
+
+  // Members on "/" should go to /my-portal
+  if (activeRole === "member" && location.pathname === "/") {
+    return <Navigate to="/my-portal" replace />;
+  }
 
   if (allowedRoles && allowedRoles.length > 0) {
     const hasAccess = roles.some((r) => allowedRoles.includes(r.role));

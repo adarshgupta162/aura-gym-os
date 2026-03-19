@@ -2,20 +2,9 @@ import { NavLink, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  LayoutDashboard,
-  Users,
-  Dumbbell,
-  CreditCard,
-  BarChart3,
-  Tags,
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  QrCode,
-  Settings,
-  LogOut,
-  PersonStanding,
-  UserCircle,
+  LayoutDashboard, Users, Dumbbell, CreditCard, BarChart3,
+  Tags, Building2, ChevronLeft, ChevronRight, QrCode,
+  Settings, LogOut, PersonStanding, UserCircle, Bell,
 } from "lucide-react";
 
 const allNavItems = [
@@ -28,6 +17,7 @@ const allNavItems = [
   { to: "/finance", icon: CreditCard, label: "Finance", roles: ["gym_admin"] },
   { to: "/analytics", icon: BarChart3, label: "Analytics", roles: ["gym_admin"] },
   { to: "/plans", icon: Tags, label: "Plans", roles: ["gym_admin"] },
+  { to: "/notifications", icon: Bell, label: "Notifications", roles: ["gym_admin", "super_admin"] },
   { to: "/my-portal", icon: UserCircle, label: "My Portal", roles: ["member"] },
 ];
 
@@ -50,12 +40,15 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
       className="fixed left-0 top-0 bottom-0 z-40 flex flex-col bg-sidebar border-r border-border"
     >
-      {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-border">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
-            <span className="text-primary-foreground font-bold text-sm">{brandInitials}</span>
-          </div>
+          {gym?.logo_url && !isSuperAdmin ? (
+            <img src={gym.logo_url} alt={brandName} className="w-8 h-8 rounded-lg flex-shrink-0 object-cover" />
+          ) : (
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-shrink-0">
+              <span className="text-primary-foreground font-bold text-sm">{brandInitials}</span>
+            </div>
+          )}
           <AnimatePresence>
             {!collapsed && (
               <motion.div
@@ -74,7 +67,6 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
         </div>
       </div>
 
-      {/* Nav Items */}
       <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.pathname === item.to;
@@ -106,7 +98,6 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
         })}
       </nav>
 
-      {/* Bottom */}
       <div className="py-3 px-2 border-t border-border space-y-0.5">
         <NavLink
           to="/settings"

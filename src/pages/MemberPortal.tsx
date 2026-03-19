@@ -1,15 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { MetricCard } from "@/components/MetricCard";
-import { DataTable } from "@/components/DataTable";
-import { UserCircle, Calendar, Dumbbell, Tags, Loader2, Clock, Home, CheckCircle, BarChart3, User, Flame, Hash, Lock } from "lucide-react";
+import { UserCircle, Calendar, Dumbbell, Tags, Loader2, Clock, Home, CheckCircle, BarChart3, User, Flame, Hash, Lock, QrCode, ArrowRightLeft, Bell } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 type Tab = "home" | "attendance" | "workout" | "progress" | "profile";
 
 const MemberPortal = () => {
-  const { user } = useAuth();
+  const { user, gym, signOut } = useAuth();
   const [tab, setTab] = useState<Tab>("home");
   const [member, setMember] = useState<any>(null);
   const [plan, setPlan] = useState<any>(null);
@@ -18,13 +18,20 @@ const MemberPortal = () => {
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [progressLogs, setProgressLogs] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dailyCodeInput, setDailyCodeInput] = useState("");
   const [checkingIn, setCheckingIn] = useState(false);
   const [weightInput, setWeightInput] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
-  const [passwordForm, setPasswordForm] = useState({ current: "", new: "", confirm: "" });
+  const [passwordForm, setPasswordForm] = useState({ new: "", confirm: "" });
   const [changingPassword, setChangingPassword] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [switchOpen, setSwitchOpen] = useState(false);
+  const [switchEmail, setSwitchEmail] = useState("");
+  const [switchPassword, setSwitchPassword] = useState("");
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -40,16 +47,18 @@ const MemberPortal = () => {
         setPlan(memberData.plans);
         setTrainer(memberData.trainers);
 
-        const [attRes, workRes, progRes, payRes] = await Promise.all([
-          supabase.from("attendance").select("*").eq("member_id", memberData.id).order("check_in", { ascending: false }).limit(50),
+        const [attRes, workRes, progRes, payRes, notifRes] = await Promise.all([
+          supabase.from("attendance").select("*").eq("member_id", memberData.id).order("check_in", { ascending: false }).limit(100),
           supabase.from("workout_plans").select("*").eq("member_id", memberData.id).order("day_of_week"),
           supabase.from("progress_logs").select("*").eq("member_id", memberData.id).order("logged_at", { ascending: false }).limit(30),
           supabase.from("payments").select("*").eq("member_id", memberData.id).order("payment_date", { ascending: false }),
+          supabase.from("notification_recipients").select("*, notifications(title, message, created_at)").eq("user_id", user.id).order("created_at", { ascending: false }).limit(20),
         ]);
         setAttendance(attRes.data || []);
         setWorkouts(workRes.data || []);
         setProgressLogs(progRes.data || []);
         setPayments(payRes.data || []);
+        setNotifications(notifRes.data || []);
       }
       setLoading(false);
     };
@@ -61,10 +70,6 @@ const MemberPortal = () => {
     setCheckingIn(true);
     try {
       const today = new Date().toISOString().split("T")[0];
-      // Check if already checked in today
-      const { data: existing } = await supabase.from("attendance").select("id").eq("member_id", member.id).eq("date", today).limit(1);
-      if (existing && existing.length > 0) { toast.error("Already checked in today!"); return; }
-
       // Verify daily code
       const { data: codeData } = await supabase.from("daily_codes").select("*").eq("gym_id", member.gym_id).eq("date", today).eq("code", dailyCodeInput.trim()).single();
       if (!codeData) { toast.error("Invalid code for today"); return; }
@@ -72,13 +77,51 @@ const MemberPortal = () => {
       await supabase.from("attendance").insert({
         member_id: member.id, gym_id: member.gym_id, method: "daily_code", date: today,
       });
-      toast.success("Checked in successfully! 🎉");
+      toast.success("Checked in! 🎉");
       setDailyCodeInput("");
-      // Refresh attendance
-      const { data: attRes } = await supabase.from("attendance").select("*").eq("member_id", member.id).order("check_in", { ascending: false }).limit(50);
+      const { data: attRes } = await supabase.from("attendance").select("*").eq("member_id", member.id).order("check_in", { ascending: false }).limit(100);
       setAttendance(attRes || []);
     } catch (err: any) { toast.error(err.message); }
     finally { setCheckingIn(false); }
+  };
+
+  const handleQrScan = async () => {
+    if (!member) return;
+    setScanning(true);
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      const scanner = new Html5Qrcode("qr-reader");
+      await scanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        async (decodedText) => {
+          await scanner.stop();
+          setScanning(false);
+          // Verify QR token
+          const today = new Date().toISOString().split("T")[0];
+          const { data: codeData } = await supabase.from("daily_codes").select("*").eq("gym_id", member.gym_id).eq("date", today).eq("qr_token", decodedText).single();
+          if (!codeData) { toast.error("Invalid or expired QR code"); return; }
+          await supabase.from("attendance").insert({
+            member_id: member.id, gym_id: member.gym_id, method: "qr", date: today,
+          });
+          toast.success("QR Check-in successful! 🎉");
+          const { data: attRes } = await supabase.from("attendance").select("*").eq("member_id", member.id).order("check_in", { ascending: false }).limit(100);
+          setAttendance(attRes || []);
+        },
+        () => {}
+      );
+    } catch (err: any) {
+      setScanning(false);
+      toast.error("Camera access denied or QR scan failed");
+    }
+  };
+
+  const stopScanning = async () => {
+    setScanning(false);
+    try {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      // The scanner instance is local, so we just set scanning to false
+    } catch {}
   };
 
   const handleSaveWeight = async () => {
@@ -99,13 +142,13 @@ const MemberPortal = () => {
 
   const handleChangePassword = async () => {
     if (passwordForm.new !== passwordForm.confirm) { toast.error("Passwords don't match"); return; }
-    if (passwordForm.new.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    if (passwordForm.new.length < 6) { toast.error("Min 6 characters"); return; }
     setChangingPassword(true);
     try {
       const { error } = await supabase.auth.updateUser({ password: passwordForm.new });
       if (error) throw error;
       toast.success("Password updated!");
-      setPasswordForm({ current: "", new: "", confirm: "" });
+      setPasswordForm({ new: "", confirm: "" });
     } catch (err: any) { toast.error(err.message); }
     finally { setChangingPassword(false); }
   };
@@ -113,6 +156,26 @@ const MemberPortal = () => {
   const toggleWorkoutDone = async (id: string, isDone: boolean) => {
     await supabase.from("workout_plans").update({ is_done: !isDone }).eq("id", id);
     setWorkouts(workouts.map(w => w.id === id ? { ...w, is_done: !isDone } : w));
+  };
+
+  const handleSwitchAccount = async () => {
+    if (!switchEmail || !switchPassword) { toast.error("Enter credentials"); return; }
+    setSwitching(true);
+    try {
+      // Store current account info
+      const savedAccounts = JSON.parse(localStorage.getItem("saved_accounts") || "[]");
+      if (user?.email && !savedAccounts.includes(user.email)) {
+        savedAccounts.push(user.email);
+        localStorage.setItem("saved_accounts", JSON.stringify(savedAccounts));
+      }
+      await signOut();
+      const { error } = await supabase.auth.signInWithPassword({ email: switchEmail, password: switchPassword });
+      if (error) throw error;
+      toast.success("Switched account!");
+      setSwitchOpen(false);
+      window.location.reload();
+    } catch (err: any) { toast.error(err.message); }
+    finally { setSwitching(false); }
   };
 
   if (loading) return <div className="flex justify-center items-center h-64"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
@@ -135,10 +198,8 @@ const MemberPortal = () => {
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
   }).length;
 
-  // Streak calculation
   const sortedDates = [...new Set(attendance.map(a => a.date))].sort().reverse();
   let streak = 0;
-  const today = new Date().toISOString().split("T")[0];
   for (let i = 0; i < sortedDates.length; i++) {
     const expected = new Date();
     expected.setDate(expected.getDate() - i);
@@ -150,27 +211,32 @@ const MemberPortal = () => {
 
   const tabs: { key: Tab; label: string; icon: any }[] = [
     { key: "home", label: "Home", icon: Home },
-    { key: "attendance", label: "Attendance", icon: Calendar },
+    { key: "attendance", label: "Attend", icon: Calendar },
     { key: "workout", label: "Workout", icon: Dumbbell },
     { key: "progress", label: "Progress", icon: BarChart3 },
     { key: "profile", label: "Profile", icon: User },
   ];
 
+  const savedAccounts = JSON.parse(localStorage.getItem("saved_accounts") || "[]").filter((e: string) => e !== user?.email);
+
   return (
     <div className="pb-20 md:pb-0">
-      {/* TAB CONTENT */}
       {tab === "home" && (
         <div className="space-y-6">
-          <div>
-            <h1 className="text-lg font-semibold text-foreground">Welcome, {member.full_name} 👋</h1>
-            <p className="text-sm text-muted-foreground">Member Code: {member.member_code}</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-lg font-semibold text-foreground">Welcome, {member.full_name.split(" ")[0]} 👋</h1>
+              <p className="text-sm text-muted-foreground">{gym?.name || "Gym"} · {member.member_code}</p>
+            </div>
+            <button onClick={() => setSwitchOpen(true)} className="p-2 rounded-lg hover:bg-surface transition-colors" title="Switch Account">
+              <ArrowRightLeft className="w-4 h-4 text-muted-foreground" />
+            </button>
           </div>
 
-          {/* Status Card */}
           <div className={`${statusBg} rounded-xl p-5 border border-border`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-label">Membership Status</p>
+                <p className="text-label">Membership</p>
                 <p className={`text-2xl font-bold ${statusColor}`}>
                   {daysLeft !== null ? `${daysLeft} days left` : "No plan"}
                 </p>
@@ -185,8 +251,8 @@ const MemberPortal = () => {
           {/* Quick Check-in */}
           <div className="bg-card rounded-xl p-5 shadow-surface">
             <h2 className="text-sm font-medium text-foreground mb-3">Quick Check-in</h2>
-            <div className="flex gap-2">
-              <input type="text" maxLength={6} placeholder="Enter 6-digit code" value={dailyCodeInput}
+            <div className="flex gap-2 mb-3">
+              <input type="text" maxLength={6} placeholder="6-digit code" value={dailyCodeInput}
                 onChange={(e) => setDailyCodeInput(e.target.value.replace(/\D/g, ""))}
                 onKeyDown={(e) => e.key === "Enter" && handleDailyCodeCheckin()}
                 className="flex-1 bg-surface rounded-lg px-4 py-3 text-center text-lg font-mono text-foreground placeholder:text-muted-foreground tracking-[0.3em] focus:outline-none focus:ring-1 focus:ring-accent" />
@@ -195,14 +261,18 @@ const MemberPortal = () => {
                 {checkingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
               </button>
             </div>
+            <button onClick={handleQrScan} disabled={scanning}
+              className="w-full py-3 bg-accent/10 text-accent rounded-lg text-sm font-medium hover:bg-accent/20 flex items-center justify-center gap-2 min-h-[48px]">
+              <QrCode className="w-5 h-5" /> {scanning ? "Scanning..." : "Scan QR Code"}
+            </button>
+            {scanning && <div id="qr-reader" className="mt-3 rounded-lg overflow-hidden" />}
           </div>
 
-          {/* Quick Stats */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-card rounded-xl p-4 shadow-surface text-center">
-              <div className="flex items-center justify-center gap-1 mb-1"><Flame className="w-4 h-4 text-amber-400" /></div>
+              <Flame className="w-4 h-4 text-amber-400 mx-auto mb-1" />
               <p className="text-xl font-bold text-foreground">{streak}</p>
-              <p className="text-xs text-muted-foreground">Day Streak</p>
+              <p className="text-xs text-muted-foreground">Streak</p>
             </div>
             <div className="bg-card rounded-xl p-4 shadow-surface text-center">
               <p className="text-xl font-bold text-foreground">{thisMonthAttendance}</p>
@@ -210,11 +280,26 @@ const MemberPortal = () => {
             </div>
             <div className="bg-card rounded-xl p-4 shadow-surface text-center">
               <p className="text-xl font-bold text-foreground">{attendance.length}</p>
-              <p className="text-xs text-muted-foreground">Total Visits</p>
+              <p className="text-xs text-muted-foreground">Total</p>
             </div>
           </div>
 
-          {/* Plan & Trainer */}
+          {/* Notifications */}
+          {notifications.length > 0 && (
+            <div className="bg-card rounded-xl p-5 shadow-surface">
+              <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2"><Bell className="w-4 h-4" /> Notifications</h2>
+              <div className="space-y-2">
+                {notifications.slice(0, 5).map(n => (
+                  <div key={n.id} className="py-2 px-3 rounded-lg bg-surface">
+                    <p className="text-sm font-medium text-foreground">{n.notifications?.title}</p>
+                    <p className="text-xs text-muted-foreground">{n.notifications?.message}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{new Date(n.notifications?.created_at).toLocaleDateString()}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-card rounded-xl p-5 shadow-surface">
               <h2 className="text-sm font-medium text-foreground mb-3">My Plan</h2>
@@ -247,22 +332,25 @@ const MemberPortal = () => {
       {tab === "attendance" && (
         <div className="space-y-6">
           <h1 className="text-lg font-semibold text-foreground">Attendance</h1>
-          {/* Check-in */}
           <div className="bg-card rounded-xl p-5 shadow-surface">
-            <h2 className="text-sm font-medium text-foreground mb-3">Enter Daily Code</h2>
-            <div className="flex gap-2">
+            <h2 className="text-sm font-medium text-foreground mb-3">Check In</h2>
+            <div className="flex gap-2 mb-3">
               <input type="text" maxLength={6} placeholder="6-digit code" value={dailyCodeInput}
                 onChange={(e) => setDailyCodeInput(e.target.value.replace(/\D/g, ""))}
                 onKeyDown={(e) => e.key === "Enter" && handleDailyCodeCheckin()}
                 className="flex-1 bg-surface rounded-lg px-4 py-3 text-center text-lg font-mono text-foreground placeholder:text-muted-foreground tracking-[0.3em] focus:outline-none focus:ring-1 focus:ring-accent" />
               <button onClick={handleDailyCodeCheckin} disabled={checkingIn}
                 className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 min-h-[48px]">
-                {checkingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : "Check In"}
+                {checkingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : "Go"}
               </button>
             </div>
+            <button onClick={handleQrScan} disabled={scanning}
+              className="w-full py-3 bg-accent/10 text-accent rounded-lg text-sm font-medium hover:bg-accent/20 flex items-center justify-center gap-2 min-h-[48px]">
+              <QrCode className="w-5 h-5" /> {scanning ? "Scanning..." : "Scan QR Code"}
+            </button>
+            {scanning && <div id="qr-reader" className="mt-3 rounded-lg overflow-hidden" />}
           </div>
 
-          {/* Calendar dots for this month */}
           <div className="bg-card rounded-xl p-5 shadow-surface">
             <h2 className="text-sm font-medium text-foreground mb-3">This Month</h2>
             <div className="grid grid-cols-7 gap-2">
@@ -275,7 +363,6 @@ const MemberPortal = () => {
                   const d = new Date(a.check_in);
                   return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
                 }).map(a => new Date(a.check_in).getDate()));
-
                 const cells = [];
                 for (let i = 0; i < firstDay; i++) cells.push(<div key={`e${i}`} />);
                 for (let d = 1; d <= daysInMonth; d++) {
@@ -292,16 +379,15 @@ const MemberPortal = () => {
             </div>
           </div>
 
-          {/* History */}
           <div className="bg-card rounded-xl p-5 shadow-surface">
             <h2 className="text-sm font-medium text-foreground mb-3">History</h2>
             {attendance.length > 0 ? (
               <div className="space-y-2">
-                {attendance.slice(0, 20).map(a => (
+                {attendance.slice(0, 30).map(a => (
                   <div key={a.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-surface-raised">
                     <div>
                       <p className="text-sm text-foreground">{new Date(a.check_in).toLocaleDateString()}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(a.check_in).toLocaleTimeString()}</p>
+                      <p className="text-xs text-muted-foreground">{new Date(a.check_in).toLocaleTimeString()}{a.check_out ? ` → ${new Date(a.check_out).toLocaleTimeString()}` : ""}</p>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-xs font-medium ${a.method === "qr" ? "bg-primary/10 text-primary" : a.method === "daily_code" ? "bg-accent/10 text-accent" : "bg-muted text-muted-foreground"}`}>{a.method}</span>
                   </div>
@@ -352,7 +438,6 @@ const MemberPortal = () => {
       {tab === "progress" && (
         <div className="space-y-6">
           <h1 className="text-lg font-semibold text-foreground">Progress</h1>
-          {/* Weight Log */}
           <div className="bg-card rounded-xl p-5 shadow-surface">
             <h2 className="text-sm font-medium text-foreground mb-3">Log Weight</h2>
             <div className="flex gap-2">
@@ -366,8 +451,6 @@ const MemberPortal = () => {
               </button>
             </div>
           </div>
-
-          {/* Weight History */}
           <div className="bg-card rounded-xl p-5 shadow-surface">
             <h2 className="text-sm font-medium text-foreground mb-3">Weight History</h2>
             {progressLogs.filter(p => p.log_type === "weight").length > 0 ? (
@@ -387,7 +470,6 @@ const MemberPortal = () => {
       {tab === "profile" && (
         <div className="space-y-6">
           <h1 className="text-lg font-semibold text-foreground">Profile</h1>
-          {/* Member Details */}
           <div className="bg-card rounded-xl p-5 shadow-surface space-y-3">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-xl font-bold text-primary">
@@ -395,7 +477,7 @@ const MemberPortal = () => {
               </div>
               <div>
                 <p className="text-lg font-semibold text-foreground">{member.full_name}</p>
-                <p className="text-sm text-muted-foreground">{member.member_code}</p>
+                <p className="text-sm text-muted-foreground">{member.member_code} · {gym?.name}</p>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 pt-2">
@@ -406,7 +488,6 @@ const MemberPortal = () => {
             </div>
           </div>
 
-          {/* Plan Info */}
           <div className="bg-card rounded-xl p-5 shadow-surface">
             <h2 className="text-sm font-medium text-foreground mb-3">Current Plan</h2>
             {plan ? (
@@ -418,7 +499,6 @@ const MemberPortal = () => {
             ) : <p className="text-sm text-muted-foreground">No plan</p>}
           </div>
 
-          {/* Payment History */}
           <div className="bg-card rounded-xl p-5 shadow-surface">
             <h2 className="text-sm font-medium text-foreground mb-3">Payment History</h2>
             {payments.length > 0 ? (
@@ -439,7 +519,25 @@ const MemberPortal = () => {
             ) : <p className="text-sm text-muted-foreground text-center py-4">No payments</p>}
           </div>
 
-          {/* Change Password */}
+          {/* Switch Account */}
+          <div className="bg-card rounded-xl p-5 shadow-surface">
+            <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2"><ArrowRightLeft className="w-4 h-4" /> Switch Account</h2>
+            <p className="text-xs text-muted-foreground mb-3">For family members sharing a device.</p>
+            {savedAccounts.length > 0 && (
+              <div className="space-y-1 mb-3">
+                {savedAccounts.map((email: string) => (
+                  <button key={email} onClick={() => { setSwitchEmail(email); setSwitchOpen(true); }}
+                    className="w-full text-left px-3 py-2 rounded-lg bg-surface hover:bg-surface-raised text-sm text-foreground transition-colors">
+                    {email}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setSwitchOpen(true)} className="w-full py-2.5 bg-accent/10 text-accent rounded-lg text-sm font-medium hover:bg-accent/20 min-h-[48px]">
+              Switch to Another Account
+            </button>
+          </div>
+
           <div className="bg-card rounded-xl p-5 shadow-surface">
             <h2 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2"><Lock className="w-4 h-4" /> Change Password</h2>
             <div className="space-y-3">
@@ -463,7 +561,7 @@ const MemberPortal = () => {
         <div className="flex">
           {tabs.map(({ key, label, icon: Icon }) => (
             <button key={key} onClick={() => setTab(key)}
-              className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors ${tab === key ? "text-primary" : "text-muted-foreground"}`}>
+              className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-medium transition-colors min-h-[48px] ${tab === key ? "text-primary" : "text-muted-foreground"}`}>
               <Icon className="w-5 h-5" />
               {label}
             </button>
@@ -480,6 +578,32 @@ const MemberPortal = () => {
           </button>
         ))}
       </div>
+
+      {/* Switch Account Dialog */}
+      <Dialog open={switchOpen} onOpenChange={setSwitchOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Switch Account</DialogTitle>
+            <DialogDescription>Enter credentials for the account you want to switch to.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-label mb-1 block">Email</label>
+              <input type="email" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={switchEmail} onChange={(e) => setSwitchEmail(e.target.value)} placeholder="family@email.com" />
+            </div>
+            <div>
+              <label className="text-label mb-1 block">Password</label>
+              <input type="password" className="w-full bg-input rounded-lg px-3 py-2 text-sm text-foreground" value={switchPassword} onChange={(e) => setSwitchPassword(e.target.value)} placeholder="••••••••" />
+            </div>
+          </div>
+          <DialogFooter>
+            <button onClick={() => setSwitchOpen(false)} className="px-4 py-2 text-sm text-muted-foreground">Cancel</button>
+            <button onClick={handleSwitchAccount} disabled={switching} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
+              {switching && <Loader2 className="w-4 h-4 animate-spin" />} Switch
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
