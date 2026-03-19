@@ -17,6 +17,8 @@ import Finance from "./pages/Finance";
 import Analytics from "./pages/Analytics";
 import Plans from "./pages/Plans";
 import MemberPortal from "./pages/MemberPortal";
+import MemberProfile from "./pages/MemberProfile";
+import Notifications from "./pages/Notifications";
 import SettingsPage from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -35,12 +37,14 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/gyms" element={<ProtectedRoute allowedRoles={["super_admin"]}><Gyms /></ProtectedRoute>} />
               <Route path="/members" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Members /></ProtectedRoute>} />
+              <Route path="/member/:id" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><MemberProfile /></ProtectedRoute>} />
               <Route path="/trainers" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Trainers /></ProtectedRoute>} />
               <Route path="/attendance" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Attendance /></ProtectedRoute>} />
               <Route path="/equipment" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Equipment /></ProtectedRoute>} />
               <Route path="/finance" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Finance /></ProtectedRoute>} />
               <Route path="/analytics" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Analytics /></ProtectedRoute>} />
               <Route path="/plans" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Plans /></ProtectedRoute>} />
+              <Route path="/notifications" element={<ProtectedRoute allowedRoles={["gym_admin", "super_admin"]}><Notifications /></ProtectedRoute>} />
               <Route path="/my-portal" element={<ProtectedRoute allowedRoles={["member"]}><MemberPortal /></ProtectedRoute>} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
