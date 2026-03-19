@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { ProgressTab } from "@/components/ProgressTab";
 
 type Tab = "home" | "attendance" | "workout" | "progress" | "profile";
 
@@ -522,36 +523,13 @@ const MemberPortal = () => {
         </div>
       )}
 
-      {tab === "progress" && (
-        <div className="space-y-6">
-          <h1 className="text-lg font-semibold text-foreground">Progress</h1>
-          <div className="bg-card rounded-xl p-5 shadow-surface">
-            <h2 className="text-sm font-medium text-foreground mb-3">Log Weight</h2>
-            <div className="flex gap-2">
-              <input type="number" placeholder="e.g. 75" value={weightInput}
-                onChange={(e) => setWeightInput(e.target.value)}
-                className="flex-1 bg-surface rounded-lg px-4 py-3 text-foreground focus:outline-none focus:ring-1 focus:ring-accent" />
-              <span className="flex items-center text-sm text-muted-foreground">kg</span>
-              <button onClick={handleSaveWeight} disabled={savingWeight}
-                className="px-4 py-3 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 disabled:opacity-50 min-h-[48px]">
-                {savingWeight ? <Loader2 className="w-4 h-4 animate-spin" /> : "Log"}
-              </button>
-            </div>
-          </div>
-          <div className="bg-card rounded-xl p-5 shadow-surface">
-            <h2 className="text-sm font-medium text-foreground mb-3">Weight History</h2>
-            {progressLogs.filter(p => p.log_type === "weight").length > 0 ? (
-              <div className="space-y-2">
-                {progressLogs.filter(p => p.log_type === "weight").map(p => (
-                  <div key={p.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-surface-raised">
-                    <span className="text-sm text-foreground">{p.value} {p.unit}</span>
-                    <span className="text-xs text-muted-foreground">{new Date(p.logged_at).toLocaleDateString()}</span>
-                  </div>
-                ))}
-              </div>
-            ) : <p className="text-sm text-muted-foreground text-center py-4">No weight entries yet</p>}
-          </div>
-        </div>
+      {tab === "progress" && member && (
+        <ProgressTab
+          memberId={member.id}
+          gymId={member.gym_id}
+          initialLogs={progressLogs}
+          totalWorkouts={workouts.length}
+        />
       )}
 
       {tab === "profile" && (
