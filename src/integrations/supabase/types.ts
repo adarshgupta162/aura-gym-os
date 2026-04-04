@@ -65,6 +65,47 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          details: Json | null
+          entity_id: string | null
+          entity_type: string
+          gym_id: string
+          id: string
+          performed_by: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type: string
+          gym_id: string
+          id?: string
+          performed_by: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string
+          gym_id?: string
+          id?: string
+          performed_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_codes: {
         Row: {
           code: string
@@ -93,6 +134,124 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "daily_codes_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      diet_plans: {
+        Row: {
+          calories: number | null
+          created_at: string
+          day_of_week: number
+          description: string
+          gym_id: string
+          id: string
+          meal_type: string
+          member_id: string
+          trainer_id: string | null
+        }
+        Insert: {
+          calories?: number | null
+          created_at?: string
+          day_of_week: number
+          description?: string
+          gym_id: string
+          id?: string
+          meal_type?: string
+          member_id: string
+          trainer_id?: string | null
+        }
+        Update: {
+          calories?: number | null
+          created_at?: string
+          day_of_week?: number
+          description?: string
+          gym_id?: string
+          id?: string
+          meal_type?: string
+          member_id?: string
+          trainer_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diet_plans_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diet_plans_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "diet_plans_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      enquiries: {
+        Row: {
+          converted_member_id: string | null
+          created_at: string
+          email: string | null
+          follow_up_date: string | null
+          gym_id: string
+          id: string
+          interest: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          converted_member_id?: string | null
+          created_at?: string
+          email?: string | null
+          follow_up_date?: string | null
+          gym_id: string
+          id?: string
+          interest?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          converted_member_id?: string | null
+          created_at?: string
+          email?: string | null
+          follow_up_date?: string | null
+          gym_id?: string
+          id?: string
+          interest?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enquiries_converted_member_id_fkey"
+            columns: ["converted_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "enquiries_gym_id_fkey"
             columns: ["gym_id"]
             isOneToOne: false
             referencedRelation: "gyms"
@@ -194,6 +353,101 @@ export type Database = {
           },
         ]
       }
+      feedback: {
+        Row: {
+          comment: string | null
+          created_at: string
+          gym_id: string
+          id: string
+          member_id: string
+          month: number
+          rating: number
+          year: number
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          gym_id: string
+          id?: string
+          member_id: string
+          month: number
+          rating: number
+          year: number
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          gym_id?: string
+          id?: string
+          member_id?: string
+          month?: number
+          rating?: number
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_subscriptions: {
+        Row: {
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          gym_id: string
+          id: string
+          max_members: number
+          plan_tier: string
+          price_monthly: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          gym_id: string
+          id?: string
+          max_members?: number
+          plan_tier?: string
+          price_monthly?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          gym_id?: string
+          id?: string
+          max_members?: number
+          plan_tier?: string
+          price_monthly?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_subscriptions_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: true
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gyms: {
         Row: {
           address: string | null
@@ -203,6 +457,7 @@ export type Database = {
           code: string
           created_at: string
           email: string | null
+          gst_number: string | null
           id: string
           is_active: boolean
           logo_url: string | null
@@ -220,6 +475,7 @@ export type Database = {
           code: string
           created_at?: string
           email?: string | null
+          gst_number?: string | null
           id?: string
           is_active?: boolean
           logo_url?: string | null
@@ -237,6 +493,7 @@ export type Database = {
           code?: string
           created_at?: string
           email?: string | null
+          gst_number?: string | null
           id?: string
           is_active?: boolean
           logo_url?: string | null
@@ -247,6 +504,108 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      inventory: {
+        Row: {
+          category: string | null
+          created_at: string
+          gym_id: string
+          id: string
+          name: string
+          quantity: number
+          selling_price: number
+          status: string
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          gym_id: string
+          id?: string
+          name: string
+          quantity?: number
+          selling_price?: number
+          status?: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          gym_id?: string
+          id?: string
+          name?: string
+          quantity?: number
+          selling_price?: number
+          status?: string
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_sales: {
+        Row: {
+          gym_id: string
+          id: string
+          inventory_id: string
+          member_id: string | null
+          quantity: number
+          sold_at: string
+          sold_by: string | null
+          total_price: number
+        }
+        Insert: {
+          gym_id: string
+          id?: string
+          inventory_id: string
+          member_id?: string | null
+          quantity?: number
+          sold_at?: string
+          sold_by?: string | null
+          total_price?: number
+        }
+        Update: {
+          gym_id?: string
+          id?: string
+          inventory_id?: string
+          member_id?: string | null
+          quantity?: number
+          sold_at?: string
+          sold_by?: string | null
+          total_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_sales_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_sales_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_sales_member_id_fkey"
+            columns: ["member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       member_xp: {
         Row: {
@@ -622,6 +981,118 @@ export type Database = {
             columns: ["member_id"]
             isOneToOne: false
             referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referrals: {
+        Row: {
+          converted_member_id: string | null
+          created_at: string
+          gym_id: string
+          id: string
+          referred_email: string | null
+          referred_name: string
+          referred_phone: string | null
+          referrer_member_id: string
+          reward_type: string | null
+          reward_value: number | null
+          status: string
+        }
+        Insert: {
+          converted_member_id?: string | null
+          created_at?: string
+          gym_id: string
+          id?: string
+          referred_email?: string | null
+          referred_name: string
+          referred_phone?: string | null
+          referrer_member_id: string
+          reward_type?: string | null
+          reward_value?: number | null
+          status?: string
+        }
+        Update: {
+          converted_member_id?: string | null
+          created_at?: string
+          gym_id?: string
+          id?: string
+          referred_email?: string | null
+          referred_name?: string
+          referred_phone?: string | null
+          referrer_member_id?: string
+          reward_type?: string | null
+          reward_value?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referrals_converted_member_id_fkey"
+            columns: ["converted_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referrals_referrer_member_id_fkey"
+            columns: ["referrer_member_id"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_attendance: {
+        Row: {
+          check_in: string
+          check_out: string | null
+          created_at: string
+          date: string
+          gym_id: string
+          id: string
+          trainer_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          check_in?: string
+          check_out?: string | null
+          created_at?: string
+          date?: string
+          gym_id: string
+          id?: string
+          trainer_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          check_in?: string
+          check_out?: string | null
+          created_at?: string
+          date?: string
+          gym_id?: string
+          id?: string
+          trainer_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_attendance_gym_id_fkey"
+            columns: ["gym_id"]
+            isOneToOne: false
+            referencedRelation: "gyms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_attendance_trainer_id_fkey"
+            columns: ["trainer_id"]
+            isOneToOne: false
+            referencedRelation: "trainers"
             referencedColumns: ["id"]
           },
         ]
