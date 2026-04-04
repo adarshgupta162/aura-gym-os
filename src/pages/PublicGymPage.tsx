@@ -111,7 +111,7 @@ const PublicGymPage = () => {
         ) : (
           <form onSubmit={handleEnquiry} className="space-y-4">
             <input value={enquiryForm.name} onChange={e => setEnquiryForm({...enquiryForm, name: e.target.value})}
-              className="w-full rounded-lg px-4 py-3 text-sm bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-1" style={{ focusRingColor: gym.primary_color }}
+              className="w-full rounded-lg px-4 py-3 text-sm bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-1 focus:ring-accent"
               placeholder="Your Name *" required />
             <input value={enquiryForm.phone} onChange={e => setEnquiryForm({...enquiryForm, phone: e.target.value})}
               className="w-full rounded-lg px-4 py-3 text-sm bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:ring-1"
